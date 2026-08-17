@@ -1,5 +1,5 @@
 # docker-compose.yml
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -18,7 +18,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U financial_user -d financial_control_db"]
+      test:
+        ["CMD-SHELL", "pg_isready -U financial_user -d financial_control_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,6 +49,28 @@ services:
   #   volumes:
   #     - ./backend:/app
   #     - /app/node_modules
+
+  # ============================================
+  # PGADMIN4 (Interface gráfica para o banco)
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: financial-control-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@financial.local
+      PGADMIN_DEFAULT_PASSWORD: pgadmin_password_123
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - financial-network
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:
