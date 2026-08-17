@@ -1,6 +1,4 @@
 # docker-compose.yml
-version: "3.8"
-
 services:
   postgres:
     build:
@@ -51,20 +49,18 @@ services:
   #     - /app/node_modules
 
   # ============================================
-  # PGADMIN4 (Interface gráfica para o banco)
+  # CLOUDBEAVER COMMUNITY (Interface moderna)
   # ============================================
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: financial-control-pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@financial.local
-      PGADMIN_DEFAULT_PASSWORD: pgadmin_password_123
-      PGADMIN_CONFIG_SERVER_MODE: "False"
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    container_name: financial-control-cloudbeaver
     ports:
-      - "5050:80"
+      - "8978:8978"
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
+      - cloudbeaver_data:/opt/cloudbeaver/workspace
+    environment:
+      CB_ENABLE_PRODUCT_UPDATES: "false"
+      CB_ANONYMIZE_STATISTICS: "true"
     networks:
       - financial-network
     restart: unless-stopped
@@ -74,6 +70,7 @@ services:
 
 volumes:
   postgres_data:
+  cloudbeaver_data:
 
 networks:
   financial-network:

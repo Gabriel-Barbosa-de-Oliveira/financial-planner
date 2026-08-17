@@ -1,4 +1,3 @@
-# Coloque este Dockerfile em database/Dockerfile
 FROM postgres:16-alpine
 
 ENV POSTGRES_USER=financial_user
