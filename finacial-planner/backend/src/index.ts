@@ -1,11 +1,13 @@
 import { environmentConfig } from './config/env.ts';
 import { createServer } from './server.ts';
+import { healthController } from './controllers/healthController.ts';
 
 
 /**
  * Função principal que inicia o servidor
  */
 async function start() {
+  const controllersPrefix = '/financial-control';
   try {
     // Carrega configurações de ambiente
     // const config = getEnvConfig();
@@ -14,7 +16,10 @@ async function start() {
  
     // Constrói a aplicação Fastify
     const app = await createServer();
- 
+
+    // Registra os controllers
+    await app.register(healthController, { prefix: controllersPrefix  });
+
     // Inicia o servidor
     app.listen({ port: environmentConfig.PORT, host: '0.0.0.0' });
  
