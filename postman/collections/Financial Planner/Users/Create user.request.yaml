@@ -1,0 +1,49 @@
+$kind: http-request
+description: Cadastra um usuário com e-mail em caixa mista e espaços nas pontas. Deve responder 201 com o e-mail normalizado, sem senha nem hash. Define `createdUserEmail` para a request seguinte.
+url: "{{BASE_URL}}/financial-control/users"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "gabrielbarbosaprofissional@hotmail.com",
+      "password": "Fatec2015."
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // E-mail único por execução, com caixa mista e espaços, para exercitar a normalização
+      const raw = `  Ana.${Date.now()}@Exemplo.com `;
+      pm.collectionVariables.set('rawEmail', raw);
+      pm.collectionVariables.set('createdUserEmail', raw.trim().toLowerCase());
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('responde 201', () => pm.response.to.have.status(201));
+      const user = pm.response.json();
+      pm.test('devolve exatamente os campos públicos do usuário', () => {
+        pm.expect(Object.keys(user).sort()).to.eql(['createdAt', 'email', 'id', 'isActive', 'updatedAt']);
+      });
+      pm.test('e-mail normalizado (minúsculas, sem espaços) e usuário ativo', () => {
+        pm.expect(user.email).to.eql(pm.collectionVariables.get('createdUserEmail'));
+        pm.expect(user.isActive).to.eql(true);
+      });
+      pm.test('id é UUID e as datas são válidas', () => {
+        pm.expect(user.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+        pm.expect(new Date(user.createdAt).toString()).to.not.eql('Invalid Date');
+        pm.expect(new Date(user.updatedAt).toString()).to.not.eql('Invalid Date');
+      });
+      pm.test('responde em menos de 1 segundo', () => pm.expect(pm.response.responseTime).to.be.below(1000));
+
+      pm.test('nunca expõe o valor da senha nem o hash', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('senha-segura-123');
+        pm.expect(text).to.not.include('scrypt');
+        pm.expect(text).to.not.include('password_hash');
+        pm.expect(text).to.not.include('passwordhash');
+      });
+    language: text/javascript
+examples: ./.resources/Create user.resources/examples
+order: 1000

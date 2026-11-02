@@ -1,0 +1,3 @@
+$kind: collection
+description: 'Cadastro de usuário (POST /financial-control/users). Rode a pasta inteira, na ordem: "Create user" define o e-mail usado por "Create user - duplicated email".'
+order: 3000

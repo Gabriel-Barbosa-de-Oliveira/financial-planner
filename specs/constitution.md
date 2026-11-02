@@ -20,6 +20,8 @@ Princípios não-negociáveis que toda spec, plano, tarefa e código seguem.
 
 9. Pequeno e reversível. Cada tarefa cabe em um commit no formato `Tipo: descrição`.
 
+10. Código em inglês. Identificadores (funções, classes, variáveis, arquivos, códigos de erro) são sempre em inglês. Só as mensagens voltadas ao usuário ficam em português.
+
 ## Stack Obrigatória
 
 Node 24 LTS, TypeScript ESM `strict` executado direto pelo Node (type stripping, imports com extensão `.ts`), zod, Jest 29 + ts-jest (ESM, testes em `src/**/*.test.ts`), Fastify 4, PostgreSQL 16 via `pg` com SQL puro (sem ORM). Frontend previsto: React + Vite.

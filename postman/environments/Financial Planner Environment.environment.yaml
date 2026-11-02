@@ -1,0 +1,7 @@
+name: Financial Planner Environment
+values:
+  - key: BASE_URL
+    value: 'http://localhost:8080'
+    enabled: true
+    type: default
+    description: Raiz da API local (sem o prefixo /financial-control)

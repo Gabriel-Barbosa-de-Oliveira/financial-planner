@@ -26,6 +26,7 @@ Inicializado com `specify init --here --integration claude --script sh` (specify
   - `frontend/`: vazio, previsto React + Vite
   - `docker-compose.yml`: Postgres (5432) + CloudBeaver (8978); serviço do backend ainda comentado
 - `.claude/agents/developer.md`: agente para código Node/TS
+- `postman/`: collection `Financial Planner` (pastas Health e Users, com testes) e ambiente com `BASE_URL`. Rodar: `postman collection run "postman/collections/Financial Planner" -e "postman/environments/Financial Planner Environment.environment.yaml" -i Users` (API no ar; `--env-var BASE_URL=...` troca a porta). A request `Create user` deve rodar antes de `Create user - duplicated email`
 - `.specify/` e `.claude/skills/speckit-*`: Spec Kit (ver seção "Spec Kit")
 
 ## Stack (backend)
@@ -33,7 +34,7 @@ Inicializado com `specify init --here --integration claude --script sh` (specify
 - Node 24, TypeScript ESM `strict`, executado direto pelo Node (type stripping), sem build no dev
 - Imports relativos **com extensão `.ts`** (`allowImportingTsExtensions`); imports só de tipo usam `import type`
 - Fastify 4 como servidor HTTP
-- zod para validação (instalado, ainda não usado)
+- zod para validação (usado no `userController`)
 - PostgreSQL 16 via `pg` (Pool), SQL puro, sem ORM
 - Testes: Jest 29 + ts-jest em modo ESM (`jest.config.js`). Arquivos `src/**/*.test.ts`, junto do código testado. Importar `describe`/`it`/`expect`/`jest` de `@jest/globals` (não há globais em ESM). Mock de módulo ESM exige `jest.unstable_mockModule` + `await import()`; preferir injeção de dependência
 
@@ -57,12 +58,13 @@ Ver `backend/.env.example`: `PORT` (padrão 8080), `NODE_ENV`, `DB_HOST`, `DB_PO
 
 ## Arquitetura do backend
 
-- `src/index.ts`: entrypoint; cria o servidor e registra controllers com prefixo `/financial-control`
-- `src/server.ts`: instância Fastify, teste de conexão com o banco, 404 e error handler globais (ZodError → 400), graceful shutdown
+- `src/index.ts`: entrypoint e composition root; cria o servidor, testa a conexão com o banco, monta as dependências (repository, hasher, service, controller) e registra health e rotas com prefixo `/financial-control`
+- `src/server.ts`: `createServer(logger = true)` monta a instância Fastify (sem tocar no banco, então é testável com `app.inject`), 404 e error handler globais (`DomainError` → status próprio, `ZodError` → 400 com `issues: [{ field, message }]`, demais → 500 genérico), graceful shutdown
+- `src/utils/errors.ts`: `DomainError` e `UsedEmailError` (409); `src/utils/passwordHasher.ts`: hash `scrypt` (`node:crypto`); `src/config/security.ts`: parâmetros do scrypt e limites de e-mail/senha
 - `src/config/`: `env.ts` e `database.ts` (pool, `query()`, `testConnection()`, `closePool()`)
 - `src/controllers/`, `src/routes/`, `src/services/`, `src/repositories/`, `src/middlewares/`, `src/utils/`
 - Camadas previstas: Routes → Controllers → Services → Repositories
-- Rotas atuais: `GET /`, `GET /health`, `GET /financial-control/health` (checa o banco)
+- Rotas atuais: `GET /`, `GET /health`, `GET /financial-control/health` (checa o banco), `POST /financial-control/users` (cadastro; contrato em `specs/001-user-crud/contracts/`)
 
 ## Banco de dados
 
@@ -77,7 +79,7 @@ Tabelas (todas com `id` UUID, `isActive`, `createdAt`, `updatedAt`): `users` →
 
 ## Convenções
 
-- Entrada externa sempre validada com zod
+- Entrada externa sempre validada com zod; os schemas ficam em `src/controllers/schemas/<entidade>/<entidade>Schemas.ts` (ex.: `schemas/user/userSchemas.ts`)
 - Tipos ficam junto do código (sem `types.ts`), sem `index.ts` de re-export
 - Funções puras e injeção de dependência; efeitos colaterais nas bordas
 - Valores de configuração em `src/config/`, nada hardcoded na lógica
@@ -86,6 +88,7 @@ Tabelas (todas com `id` UUID, `isActive`, `createdAt`, `updatedAt`): `users` →
 - Mudanças relevantes começam por uma spec em `specs/NNN-nome/`
 - Nunca commitar segredos nem ler `.env`
 - Mensagens e textos voltados ao usuário em português
+- Identificadores de código (funções, classes, variáveis, arquivos, códigos de erro) sempre em inglês, ex.: `UsedEmailError`, `createUserService`. Só as mensagens exibidas ao usuário ficam em português
 
 ## Git
 
@@ -94,7 +97,9 @@ Tabelas (todas com `id` UUID, `isActive`, `createdAt`, `updatedAt`): `users` →
 
 ## Estado atual (nov/2026)
 
-- Branch `feature/create-user`: fluxo de criação de usuário ainda não iniciado
-- `src/routes/routesIndex.ts` tem `registerRoutes()` com rotas comentadas, ainda não chamada
+- Branch `feature/create-user`: cadastro de usuário implementado (`specs/001-user-crud`, tarefas T001–T013 e T015 concluídas). Falta a validação manual contra o Postgres real (T014), que exige `docker compose down -v` para reaplicar o `schema.sql`. Consulta, listagem, alteração e desativação lógica de usuário ainda não existem (feature futura, depois do login)
+- `registerRoutes(app, dependencies)` em `src/routes/routesIndex.ts` está em uso e registra `userRoutes` em `/users`; categorias e transações seguem comentadas
+- `schema.sql`: `users.email` é único só entre ativos (`idx_users_email_active`) e o trigger de auditoria omite `password_hash`. Bancos criados antes dessa mudança precisam de `docker compose down -v`
+- A rota de cadastro é aberta (sem autenticação) e não deve ir para produção assim
 - `src/routes/healthRoutes.ts` duplica `healthController` e tem imports sem `.ts`; escolher um padrão (routes ou controllers) e remover o outro
 - Constraint `check_installment_date_not_past` bloqueia UPDATE de parcelas já vencidas (ex.: marcar como paga)

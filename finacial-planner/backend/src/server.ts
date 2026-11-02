@@ -1,13 +1,12 @@
 import Fastify from 'fastify';
-import { testConnection, closePool } from './config/database.ts';
+import type { FastifyServerOptions } from 'fastify';
+import { ZodError } from 'zod';
+import { closePool } from './config/database.ts';
+import { DomainError } from './utils/errors.ts';
 
-export const createServer = async () => {
-  const app = Fastify({
-    logger: true
-  });
+export const createServer = async (logger: FastifyServerOptions['logger'] = true) => {
+  const app = Fastify({ logger });
 
-  await testConnection();
-  
   // Middleware: CORS (quando implementar rotas frontend)
   // app.register(require('@fastify/cors'));
 
@@ -43,12 +42,25 @@ export const createServer = async () => {
   app.setErrorHandler((error, request, reply) => {
     console.error(error);
 
-    // Se for erro de validação do Zod, retornamos 400
-    if (error.name === 'ZodError') {
+    // Erros previsíveis de domínio carregam o próprio status e mensagem
+    if (error instanceof DomainError) {
+      return reply.status(error.statusCode).send({
+        error: error.code,
+        message: error.message,
+        statusCode: error.statusCode,
+      });
+    }
+
+    // Se for erro de validação do Zod, retornamos 400 com os campos inválidos
+    if (error instanceof ZodError) {
       return reply.status(400).send({
         error: 'Validation Error',
         message: 'Dados enviados não passaram na validação',
         statusCode: 400,
+        issues: error.issues.map((issue) => ({
+          field: issue.path.join('.') || 'body',
+          message: issue.message,
+        })),
       });
     }
 

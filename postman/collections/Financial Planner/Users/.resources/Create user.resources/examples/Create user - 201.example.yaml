@@ -1,0 +1,22 @@
+$kind: http-example
+description: 'Create user - 201'
+request:
+  url: '{{BASE_URL}}/financial-control/users'
+  method: POST
+response:
+  statusCode: 201
+  statusText: Created
+  headers:
+    - key: Content-Type
+      value: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "id": "6f1d3c1e-0c4b-4f0e-9d1a-2b7a8f3c9e10",
+        "email": "ana@exemplo.com",
+        "isActive": true,
+        "createdAt": "2026-11-02T10:00:00.000Z",
+        "updatedAt": "2026-11-02T10:00:00.000Z"
+      }
+order: 1000

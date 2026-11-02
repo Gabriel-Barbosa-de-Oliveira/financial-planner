@@ -1,0 +1,39 @@
+$kind: http-request
+description: 'E-mail em formato inválido: 400 apontando o campo `email`.'
+url: '{{BASE_URL}}/financial-control/users'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "invalido",
+      "password": "senha-segura-123"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 de validação', () => {
+        pm.response.to.have.status(400);
+        pm.expect(pm.response.json().error).to.eql('Validation Error');
+      });
+      const issues = pm.response.json().issues || [];
+      pm.test('aponta os campos inválidos: email', () => {
+        pm.expect(issues.map((i) => i.field).sort()).to.eql(["email"]);
+      });
+      pm.test('mensagens de validação em português', () => {
+        const texts = issues.map((i) => i.message);
+        pm.expect(texts).to.include("E-mail inválido");
+      });
+      pm.test('nunca expõe o valor da senha nem o hash', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('senha-segura-123');
+        pm.expect(text).to.not.include('scrypt');
+        pm.expect(text).to.not.include('password_hash');
+        pm.expect(text).to.not.include('passwordhash');
+      });
+examples: './.resources/Create user - invalid email.resources/examples'
+order: 3000
