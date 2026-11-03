@@ -3,6 +3,7 @@ import type { RouteHandlerMethod } from 'fastify';
 import { createServer } from '../server.ts';
 import { registerRoutes } from './routesIndex.ts';
 import type { UserController } from '../controllers/userController.ts';
+import type { AccountController } from '../controllers/accountController.ts';
 
 const ID = '6f1d3c1e-0c4b-4f0e-9d1a-2b7a8f3c9e10';
 
@@ -29,6 +30,14 @@ describe('userRoutes', () => {
 
   const handler = () => jest.fn<RouteHandlerMethod>(async (_request, reply) => reply.status(200).send({ ok: true }));
 
+  const accountControllerStub: AccountController = {
+    create: handler(),
+    list: handler(),
+    getById: handler(),
+    update: handler(),
+    remove: handler(),
+  };
+
   beforeEach(async () => {
     controller = {
       create: handler(),
@@ -39,7 +48,7 @@ describe('userRoutes', () => {
     };
     app = await createServer(false);
     await app.register(
-      async (instance) => registerRoutes(instance, { user: { controller } }),
+      async (instance) => registerRoutes(instance, { user: { controller }, account: { controller: accountControllerStub } }),
       { prefix: '/financial-control' },
     );
     await app.ready();

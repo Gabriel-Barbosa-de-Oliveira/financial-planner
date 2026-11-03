@@ -1,12 +1,16 @@
 import { environmentConfig } from './config/env.ts';
 import { securityConfig } from './config/security.ts';
+import { defaultWorkspaceConfig } from './config/workspace.ts';
 import { query, testConnection } from './config/database.ts';
 import { createServer } from './server.ts';
 import { healthController } from './controllers/healthController.ts';
 import { createUserController } from './controllers/userController.ts';
+import { createAccountController } from './controllers/accountController.ts';
 import { registerRoutes } from './routes/routesIndex.ts';
 import { createUserRepository } from './repositories/userRepository.ts';
 import { createUserService } from './services/userService.ts';
+import { createAccountRepository } from './repositories/accountRepository.ts';
+import { createAccountService } from './services/accountService.ts';
 import { createPasswordHasher } from './utils/passwordHasher.ts';
 
 
@@ -35,8 +39,14 @@ async function start() {
       repository: createUserRepository(query),
       hasher: createPasswordHasher(securityConfig.scrypt),
     });
+    const accountService = createAccountService({
+      repository: createAccountRepository(query, defaultWorkspaceConfig.name),
+    });
     await app.register(
-      async (instance) => registerRoutes(instance, { user: { controller: createUserController(userService) } }),
+      async (instance) => registerRoutes(instance, {
+        user: { controller: createUserController(userService) },
+        account: { controller: createAccountController(accountService) },
+      }),
       { prefix: controllersPrefix },
     );
 

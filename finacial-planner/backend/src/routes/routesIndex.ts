@@ -1,11 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { userRoutes } from './userRoutes.ts';
 import type { UserRoutesOptions } from './userRoutes.ts';
+import { accountRoutes } from './accountRoutes.ts';
+import type { AccountRoutesOptions } from './accountRoutes.ts';
 // import { categoryRoutes } from './categoryRoutes.ts';
 // import { transactionRoutes } from './transactionRoutes.ts';
 
 export type RoutesDependencies = {
   user: UserRoutesOptions;
+  account: AccountRoutesOptions;
 };
 
 /**
@@ -17,6 +20,9 @@ export type RoutesDependencies = {
 export async function registerRoutes(app: FastifyInstance, dependencies: RoutesDependencies) {
   // Registra as rotas de usuário
   await app.register(userRoutes, { prefix: '/users', ...dependencies.user });
+
+  // Registra as rotas de conta
+  await app.register(accountRoutes, { prefix: '/accounts', ...dependencies.account });
 
 //   // Registra as rotas de categoria
 //   await app.register(categoryRoutes, { prefix: '/categories' });

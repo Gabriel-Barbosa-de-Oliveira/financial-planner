@@ -1,0 +1,28 @@
+$kind: http-request
+description: 'Muda o tipo da conta criada.'
+url: '{{BASE_URL}}/financial-control/accounts/{{createdAccountId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "type": "INVESTMENT"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com o novo tipo e o saldo intacto', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().type).to.eql('INVESTMENT');
+        pm.expect(pm.response.json().balance).to.eql('1500.00');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 10100

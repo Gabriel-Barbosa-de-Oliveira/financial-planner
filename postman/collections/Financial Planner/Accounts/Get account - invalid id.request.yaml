@@ -1,0 +1,20 @@
+$kind: http-request
+description: 'Identificador em formato inválido: 400 apontando `id`.'
+url: '{{BASE_URL}}/financial-control/accounts/abc'
+method: GET
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 apontando id', () => {
+        pm.response.to.have.status(400);
+        const issues = pm.response.json().issues || [];
+        pm.expect(issues.map((i) => i.field)).to.include('id');
+        pm.expect(issues.map((i) => i.message)).to.include('Identificador inválido');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 9200

@@ -1,0 +1,245 @@
+openapi: 3.0.3
+info:
+  title: Financial Control - Contas
+  version: 0.3.0
+  description: CRUD de contas do workspace padrão. Operações abertas no MVP, sem autenticação. Saldo trafega como texto decimal.
+servers:
+  - url: http://localhost:8080/financial-control
+paths:
+  /accounts:
+    post:
+      summary: Cadastra uma conta
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+            examples:
+              nubank:
+                value:
+                  name: Nubank
+                  type: BANK
+                  balance: '1500.00'
+              wallet:
+                value:
+                  name: Carteira
+                  type: CASH
+      responses:
+        '201':
+          description: Conta criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/UsedName'
+        '422':
+          description: Workspace padrão não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: WORKSPACE_UNAVAILABLE
+                message: Workspace padrão não encontrado
+                statusCode: 422
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      summary: Lista as contas ativas
+      operationId: listAccounts
+      responses:
+        '200':
+          description: Contas ativas por ordem de criação (lista vazia quando não há nenhuma)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Account'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /accounts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Consulta uma conta ativa pelo identificador
+      operationId: getAccountById
+      responses:
+        '200':
+          description: Conta encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      summary: Altera nome e/ou tipo de uma conta ativa (o saldo não muda por aqui)
+      operationId: updateAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountRequest'
+            examples:
+              rename:
+                value:
+                  name: Santander Corrente
+              retype:
+                value:
+                  type: SAVINGS
+      responses:
+        '200':
+          description: Conta alterada; updatedAt renovado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/UsedName'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      summary: Desativa uma conta (remoção lógica)
+      operationId: deactivateAccount
+      responses:
+        '204':
+          description: Conta desativada; sem corpo
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    AccountType:
+      type: string
+      enum: [BANK, INVESTMENT, CASH, SAVINGS]
+    Account:
+      type: object
+      required: [id, name, type, balance, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/AccountType'
+        balance:
+          type: string
+          pattern: '^-?\d+\.\d{2}$'
+          example: '1500.00'
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        type:
+          $ref: '#/components/schemas/AccountType'
+        balance:
+          type: string
+          pattern: '^-?\d{1,10}(\.\d{1,2})?$'
+          default: '0.00'
+    UpdateAccountRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        type:
+          $ref: '#/components/schemas/AccountType'
+    Error:
+      type: object
+      required: [error, message, statusCode]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        statusCode:
+          type: integer
+    ValidationError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          required: [issues]
+          properties:
+            issues:
+              type: array
+              items:
+                type: object
+                required: [field, message]
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+  responses:
+    ValidationError:
+      description: Entrada inválida (corpo ou identificador)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+    NotFound:
+      description: Conta não encontrada (inexistente ou desativada)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: ACCOUNT_NOT_FOUND
+            message: Conta não encontrada
+            statusCode: 404
+    UsedName:
+      description: Já existe uma conta ativa com este nome
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: USED_ACCOUNT_NAME
+            message: Já existe uma conta com este nome
+            statusCode: 409
+    InternalError:
+      description: Erro inesperado, sem detalhes internos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
