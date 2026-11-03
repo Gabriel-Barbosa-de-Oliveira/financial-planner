@@ -2,3 +2,5 @@ $kind: collection
 variables:
   rawEmail: ""
   createdUserEmail: ""
+  createdUserId: ""
+  updatedRawEmail: ""

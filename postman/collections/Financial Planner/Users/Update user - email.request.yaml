@@ -1,0 +1,43 @@
+$kind: http-request
+description: 'Troca o e-mail do usuário criado (caixa mista e espaços). Deve normalizar, manter o `id` e renovar `updatedAt`. Atualiza `createdUserEmail`.'
+url: '{{BASE_URL}}/financial-control/users/{{createdUserId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{updatedRawEmail}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      const raw = `  Novo.${Date.now()}@Exemplo.com `;
+      pm.collectionVariables.set('updatedRawEmail', raw);
+      pm.collectionVariables.set('createdUserEmail', raw.trim().toLowerCase());
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200', () => pm.response.to.have.status(200));
+      const user = pm.response.json();
+      pm.test('devolve exatamente os campos públicos', () => {
+        pm.expect(Object.keys(user).sort()).to.eql(['createdAt', 'email', 'id', 'isActive', 'updatedAt']);
+        pm.expect(user.isActive).to.eql(true);
+      });
+      pm.test('e-mail normalizado, mesmo id e updatedAt renovado', () => {
+        pm.expect(user.email).to.eql(pm.collectionVariables.get('createdUserEmail'));
+        pm.expect(user.id).to.eql(pm.collectionVariables.get('createdUserId'));
+        pm.expect(new Date(user.updatedAt).getTime()).to.be.above(new Date(user.createdAt).getTime());
+      });
+      pm.test('nunca expõe o valor da senha nem o hash', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('senha-segura-123');
+        pm.expect(text).to.not.include('nova-senha-123');
+        pm.expect(text).to.not.include('scrypt');
+        pm.expect(text).to.not.include('password_hash');
+        pm.expect(text).to.not.include('passwordhash');
+      });
+order: 10000

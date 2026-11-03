@@ -36,7 +36,7 @@ async function start() {
       hasher: createPasswordHasher(securityConfig.scrypt),
     });
     await app.register(
-      async (instance) => registerRoutes(instance, { user: { createUser: createUserController(userService) } }),
+      async (instance) => registerRoutes(instance, { user: { controller: createUserController(userService) } }),
       { prefix: controllersPrefix },
     );
 

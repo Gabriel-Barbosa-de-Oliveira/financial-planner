@@ -8,8 +8,8 @@ body:
   type: json
   content: |-
     {
-      "email": "gabrielbarbosaprofissional@hotmail.com",
-      "password": "Fatec2015."
+      "email": "{{rawEmail}}",
+      "password": "senha-segura-123"
     }
 scripts:
   - type: beforeRequest
@@ -23,6 +23,7 @@ scripts:
     code: |-
       pm.test('responde 201', () => pm.response.to.have.status(201));
       const user = pm.response.json();
+      pm.collectionVariables.set('createdUserId', user.id);
       pm.test('devolve exatamente os campos públicos do usuário', () => {
         pm.expect(Object.keys(user).sort()).to.eql(['createdAt', 'email', 'id', 'isActive', 'updatedAt']);
       });

@@ -1,0 +1,36 @@
+$kind: http-request
+description: 'Tenta alterar `isActive`: 400, o cliente não controla esse campo.'
+url: '{{BASE_URL}}/financial-control/users/{{createdUserId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "proibido@exemplo.com",
+      "isActive": false
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 de validação', () => {
+        pm.response.to.have.status(400);
+        pm.expect(pm.response.json().error).to.eql('Validation Error');
+      });
+      const issues = pm.response.json().issues || [];
+      pm.test('recusa o campo não permitido', () => {
+        pm.expect(issues.map((i) => i.field)).to.include('body');
+        pm.expect(issues.map((i) => i.message)).to.include("Campo não permitido na alteração de usuário");
+      });
+      pm.test('nunca expõe o valor da senha nem o hash', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('senha-segura-123');
+        pm.expect(text).to.not.include('nova-senha-123');
+        pm.expect(text).to.not.include('scrypt');
+        pm.expect(text).to.not.include('password_hash');
+        pm.expect(text).to.not.include('passwordhash');
+      });
+order: 10500

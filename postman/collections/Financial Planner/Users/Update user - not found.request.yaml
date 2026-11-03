@@ -1,0 +1,33 @@
+$kind: http-request
+description: 'UUID válido que não existe: 404.'
+url: '{{BASE_URL}}/financial-control/users/00000000-0000-4000-8000-000000000000'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "naoexiste@exemplo.com"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 404 Usuário não encontrado', () => {
+        pm.response.to.have.status(404);
+        const body = pm.response.json();
+        pm.expect(body.error).to.eql('USER_NOT_FOUND');
+        pm.expect(body.message).to.eql('Usuário não encontrado');
+        pm.expect(body.statusCode).to.eql(404);
+      });
+      pm.test('nunca expõe o valor da senha nem o hash', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('senha-segura-123');
+        pm.expect(text).to.not.include('nova-senha-123');
+        pm.expect(text).to.not.include('scrypt');
+        pm.expect(text).to.not.include('password_hash');
+        pm.expect(text).to.not.include('passwordhash');
+      });
+order: 10600

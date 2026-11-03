@@ -60,11 +60,12 @@ Ver `backend/.env.example`: `PORT` (padrão 8080), `NODE_ENV`, `DB_HOST`, `DB_PO
 
 - `src/index.ts`: entrypoint e composition root; cria o servidor, testa a conexão com o banco, monta as dependências (repository, hasher, service, controller) e registra health e rotas com prefixo `/financial-control`
 - `src/server.ts`: `createServer(logger = true)` monta a instância Fastify (sem tocar no banco, então é testável com `app.inject`), 404 e error handler globais (`DomainError` → status próprio, `ZodError` → 400 com `issues: [{ field, message }]`, demais → 500 genérico), graceful shutdown
-- `src/utils/errors.ts`: `DomainError` e `UsedEmailError` (409); `src/utils/passwordHasher.ts`: hash `scrypt` (`node:crypto`); `src/config/security.ts`: parâmetros do scrypt e limites de e-mail/senha
+- `src/controllers/userController.ts`: `createUserController(service)` devolve `{ create, list, getById, update, remove }`; `src/routes/userRoutes.ts` liga cada um à sua rota
+- `src/utils/errors.ts`: `DomainError`, `UsedEmailError` (409) e `UserNotFoundError` (404); `src/utils/passwordHasher.ts`: hash `scrypt` (`node:crypto`); `src/config/security.ts`: parâmetros do scrypt e limites de e-mail/senha
 - `src/config/`: `env.ts` e `database.ts` (pool, `query()`, `testConnection()`, `closePool()`)
 - `src/controllers/`, `src/routes/`, `src/services/`, `src/repositories/`, `src/middlewares/`, `src/utils/`
 - Camadas previstas: Routes → Controllers → Services → Repositories
-- Rotas atuais: `GET /`, `GET /health`, `GET /financial-control/health` (checa o banco), `POST /financial-control/users` (cadastro; contrato em `specs/001-user-crud/contracts/`)
+- Rotas atuais: `GET /`, `GET /health`, `GET /financial-control/health` (checa o banco), `POST /financial-control/users` (cadastro), `GET /financial-control/users`, `GET|PATCH|DELETE /financial-control/users/:id` (contratos em `specs/001-user-crud/contracts/` e `specs/002-user-read-update-delete/contracts/`; `DELETE` é desativação lógica e responde 204)
 
 ## Banco de dados
 
@@ -97,9 +98,9 @@ Tabelas (todas com `id` UUID, `isActive`, `createdAt`, `updatedAt`): `users` →
 
 ## Estado atual (nov/2026)
 
-- Branch `feature/create-user`: cadastro de usuário implementado (`specs/001-user-crud`, tarefas T001–T013 e T015 concluídas). Falta a validação manual contra o Postgres real (T014), que exige `docker compose down -v` para reaplicar o `schema.sql`. Consulta, listagem, alteração e desativação lógica de usuário ainda não existem (feature futura, depois do login)
+- Branch `feature/create-user`: CRUD de usuário completo (`specs/001-user-crud` e `specs/002-user-read-update-delete`): cadastro, listagem, consulta por id, alteração parcial e desativação lógica. Pendente: validação manual contra o Postgres real (T014 da 001 e T024 da 002), que exige `docker compose down -v` para reaplicar o `schema.sql`
 - `registerRoutes(app, dependencies)` em `src/routes/routesIndex.ts` está em uso e registra `userRoutes` em `/users`; categorias e transações seguem comentadas
 - `schema.sql`: `users.email` é único só entre ativos (`idx_users_email_active`) e o trigger de auditoria omite `password_hash`. Bancos criados antes dessa mudança precisam de `docker compose down -v`
-- A rota de cadastro é aberta (sem autenticação) e não deve ir para produção assim
+- As rotas de usuário são abertas (sem autenticação) e não devem ir para produção assim; a proteção vem com a feature de login
 - `src/routes/healthRoutes.ts` duplica `healthController` e tem imports sem `.ts`; escolher um padrão (routes ou controllers) e remover o outro
 - Constraint `check_installment_date_not_past` bloqueia UPDATE de parcelas já vencidas (ex.: marcar como paga)

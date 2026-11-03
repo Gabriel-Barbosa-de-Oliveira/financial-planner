@@ -38,7 +38,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
-                error: Conflict
+                error: USED_EMAIL
                 message: E-mail já está em uso
                 statusCode: 409
         '500':
