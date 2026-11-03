@@ -26,7 +26,7 @@ Inicializado com `specify init --here --integration claude --script sh` (specify
   - `frontend/`: vazio, previsto React + Vite
   - `docker-compose.yml`: Postgres (5432) + CloudBeaver (8978); serviço do backend ainda comentado
 - `.claude/agents/developer.md`: agente para código Node/TS
-- `postman/`: collection `Financial Planner` (pastas Health e Users, com testes) e ambiente com `BASE_URL`. Rodar: `postman collection run "postman/collections/Financial Planner" -e "postman/environments/Financial Planner Environment.environment.yaml" -i Users` (API no ar; `--env-var BASE_URL=...` troca a porta). A request `Create user` deve rodar antes de `Create user - duplicated email`
+- `postman/`: collection `Financial Planner` (pastas Health, Users e Accounts, com testes) e ambiente com `BASE_URL`. Rodar: `postman collection run "postman/collections/Financial Planner" -e "postman/environments/Financial Planner Environment.environment.yaml" -i Users` (ou `-i Accounts`) (API no ar; `--env-var BASE_URL=...` troca a porta). A request `Create user` deve rodar antes de `Create user - duplicated email`
 - `.specify/` e `.claude/skills/speckit-*`: Spec Kit (ver seção "Spec Kit")
 
 ## Stack (backend)
@@ -61,16 +61,19 @@ Ver `backend/.env.example`: `PORT` (padrão 8080), `NODE_ENV`, `DB_HOST`, `DB_PO
 - `src/index.ts`: entrypoint e composition root; cria o servidor, testa a conexão com o banco, monta as dependências (repository, hasher, service, controller) e registra health e rotas com prefixo `/financial-control`
 - `src/server.ts`: `createServer(logger = true)` monta a instância Fastify (sem tocar no banco, então é testável com `app.inject`), 404 e error handler globais (`DomainError` → status próprio, `ZodError` → 400 com `issues: [{ field, message }]`, demais → 500 genérico), graceful shutdown
 - `src/controllers/userController.ts`: `createUserController(service)` devolve `{ create, list, getById, update, remove }`; `src/routes/userRoutes.ts` liga cada um à sua rota
-- `src/utils/errors.ts`: `DomainError`, `UsedEmailError` (409) e `UserNotFoundError` (404); `src/utils/passwordHasher.ts`: hash `scrypt` (`node:crypto`); `src/config/security.ts`: parâmetros do scrypt e limites de e-mail/senha
+- `src/controllers/accountController.ts`, `src/services/accountService.ts`, `src/repositories/accountRepository.ts`, `src/routes/accountRoutes.ts`: CRUD de contas, mesmo padrão do usuário. O repository recebe o nome do workspace (`src/config/workspace.ts`, `familia`) e resolve o id no SQL; o saldo trafega como string decimal
+- `src/utils/errors.ts`: `DomainError`, `UsedEmailError` (409), `UserNotFoundError` (404), `AccountNotFoundError` (404), `UsedAccountNameError` (409) e `WorkspaceUnavailableError` (422); `src/utils/passwordHasher.ts`: hash `scrypt` (`node:crypto`); `src/config/security.ts`: parâmetros do scrypt e limites de e-mail/senha
 - `src/config/`: `env.ts` e `database.ts` (pool, `query()`, `testConnection()`, `closePool()`)
 - `src/controllers/`, `src/routes/`, `src/services/`, `src/repositories/`, `src/middlewares/`, `src/utils/`
 - Camadas previstas: Routes → Controllers → Services → Repositories
-- Rotas atuais: `GET /`, `GET /health`, `GET /financial-control/health` (checa o banco), `POST /financial-control/users` (cadastro), `GET /financial-control/users`, `GET|PATCH|DELETE /financial-control/users/:id` (contratos em `specs/001-user-crud/contracts/` e `specs/002-user-read-update-delete/contracts/`; `DELETE` é desativação lógica e responde 204)
+- Rotas atuais: `GET /`, `GET /health`, `GET /financial-control/health` (checa o banco), `POST /financial-control/users` (cadastro), `GET /financial-control/users`, `GET|PATCH|DELETE /financial-control/users/:id` (contratos em `specs/001-user-crud/contracts/` e `specs/002-user-read-update-delete/contracts/`; `DELETE` é desativação lógica e responde 204), `POST|GET /financial-control/accounts`, `GET|PATCH|DELETE /financial-control/accounts/:id` (contrato em `specs/003-accounts/contracts/`; PATCH altera só nome e tipo, nunca o saldo)
 
 ## Banco de dados
 
 Tabelas (todas com `id` UUID, `isActive`, `createdAt`, `updatedAt`): `users` → `workspaces` → `members`, `accounts`, `categories`, `transactions` → `installments`, além de `audit_log`.
 
+- Seed no fim do `schema.sql`: workspace `familia` (único do MVP) e o usuário dono `familia@seed.local`, com `password_hash` inválido (não autentica; definir senha real via `PATCH /users/:id`)
+- `accounts`: `balance` NOT NULL, `type` com CHECK (BANK, INVESTMENT, CASH, SAVINGS) e nome único entre ativas por workspace sem diferenciar caixa (`idx_accounts_name_active`)
 - Soft delete via `isActive = FALSE`; consultas filtram registros ativos
 - Triggers gravam todo INSERT/UPDATE/DELETE em `audit_log`
 - `value` sempre positivo; o sentido (ENTRADA/SAÍDA) vem de `categories.type`
@@ -98,9 +101,10 @@ Tabelas (todas com `id` UUID, `isActive`, `createdAt`, `updatedAt`): `users` →
 
 ## Estado atual (nov/2026)
 
+- Branch `feature/accounts`: CRUD de contas implementado (`specs/003-accounts`), validado em Postgres descartável (Postman: 51 requests, 133 asserções). Pendente: validação contra o Postgres real (T020), que exige `docker compose down -v` para reaplicar o `schema.sql` (seed do workspace e constraints de `accounts`)
 - Branch `feature/create-user`: CRUD de usuário completo (`specs/001-user-crud` e `specs/002-user-read-update-delete`): cadastro, listagem, consulta por id, alteração parcial e desativação lógica. Pendente: validação manual contra o Postgres real (T014 da 001 e T024 da 002), que exige `docker compose down -v` para reaplicar o `schema.sql`
-- `registerRoutes(app, dependencies)` em `src/routes/routesIndex.ts` está em uso e registra `userRoutes` em `/users`; categorias e transações seguem comentadas
+- `registerRoutes(app, dependencies)` em `src/routes/routesIndex.ts` está em uso e registra `userRoutes` em `/users` e `accountRoutes` em `/accounts`; categorias e transações seguem comentadas
 - `schema.sql`: `users.email` é único só entre ativos (`idx_users_email_active`) e o trigger de auditoria omite `password_hash`. Bancos criados antes dessa mudança precisam de `docker compose down -v`
-- As rotas de usuário são abertas (sem autenticação) e não devem ir para produção assim; a proteção vem com a feature de login
+- As rotas de usuário e de conta são abertas (sem autenticação) e não devem ir para produção assim; a proteção vem com a feature de login
 - `src/routes/healthRoutes.ts` duplica `healthController` e tem imports sem `.ts`; escolher um padrão (routes ou controllers) e remover o outro
 - Constraint `check_installment_date_not_past` bloqueia UPDATE de parcelas já vencidas (ex.: marcar como paga)

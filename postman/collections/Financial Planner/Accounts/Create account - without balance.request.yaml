@@ -1,0 +1,35 @@
+$kind: http-request
+description: 'Cadastra sem saldo: o saldo começa em `"0.00"`. Define `secondAccountId` e `secondAccountName`.'
+url: '{{BASE_URL}}/financial-control/accounts'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{secondAccountName}}",
+      "type": "CASH"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('secondAccountName', `Carteira ${pm.collectionVariables.get('accountRunId')}`);
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 201 com saldo 0.00', () => {
+        pm.response.to.have.status(201);
+        const account = pm.response.json();
+        pm.expect(account.balance).to.eql('0.00');
+        pm.expect(account.type).to.eql('CASH');
+        pm.collectionVariables.set('secondAccountId', account.id);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 2000

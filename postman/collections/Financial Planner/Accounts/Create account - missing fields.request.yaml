@@ -1,0 +1,27 @@
+$kind: http-request
+description: 'Corpo sem nome e sem tipo: 400 apontando os dois.'
+url: '{{BASE_URL}}/financial-control/accounts'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {}
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 de validação apontando os campos', () => {
+        pm.response.to.have.status(400);
+        pm.expect(pm.response.json().error).to.eql('Validation Error');
+        const fields = (pm.response.json().issues || []).map((i) => i.field);
+        ['name', 'type'].forEach((f) => pm.expect(fields).to.include(f));
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 8000

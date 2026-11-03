@@ -1,0 +1,35 @@
+$kind: http-request
+description: 'Renomeia a conta criada. Saldo e id não mudam. Define `updatedAccountName`.'
+url: '{{BASE_URL}}/financial-control/accounts/{{createdAccountId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "  {{updatedAccountName}} "
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('updatedAccountName', `Nubank PJ ${pm.collectionVariables.get('accountRunId')}`);
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com o novo nome e o saldo intacto', () => {
+        pm.response.to.have.status(200);
+        const account = pm.response.json();
+        pm.expect(account.id).to.eql(pm.collectionVariables.get('createdAccountId'));
+        pm.expect(account.name).to.eql(pm.collectionVariables.get('updatedAccountName'));
+        pm.expect(account.balance).to.eql('1500.00');
+        pm.expect(new Date(account.updatedAt).getTime()).to.be.above(new Date(account.createdAt).getTime());
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 10000

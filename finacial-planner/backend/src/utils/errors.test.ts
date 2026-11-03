@@ -1,5 +1,12 @@
 import { describe, it, expect } from '@jest/globals';
-import { DomainError, UsedEmailError, UserNotFoundError } from './errors.ts';
+import {
+  AccountNotFoundError,
+  DomainError,
+  UsedAccountNameError,
+  UsedEmailError,
+  UserNotFoundError,
+  WorkspaceUnavailableError,
+} from './errors.ts';
 
 describe('UsedEmailError', () => {
   const error = new UsedEmailError();
@@ -30,5 +37,25 @@ describe('UserNotFoundError', () => {
     expect(error).toBeInstanceOf(DomainError);
     expect(error).toBeInstanceOf(Error);
     expect(error.name).toBe('UserNotFoundError');
+  });
+});
+
+describe.each([
+  [AccountNotFoundError, 'ACCOUNT_NOT_FOUND', 404, 'Conta não encontrada'],
+  [UsedAccountNameError, 'USED_ACCOUNT_NAME', 409, 'Já existe uma conta com este nome'],
+  [WorkspaceUnavailableError, 'WORKSPACE_UNAVAILABLE', 422, 'Workspace padrão não encontrado'],
+])('%p', (ErrorClass, code, statusCode, message) => {
+  const error = new ErrorClass();
+
+  it('traduz para o status certo com mensagem em português', () => {
+    expect(error.code).toBe(code);
+    expect(error.statusCode).toBe(statusCode);
+    expect(error.message).toBe(message);
+  });
+
+  it('é um DomainError e um Error', () => {
+    expect(error).toBeInstanceOf(DomainError);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe(ErrorClass.name);
   });
 });

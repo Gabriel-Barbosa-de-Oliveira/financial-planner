@@ -1,0 +1,21 @@
+$kind: http-request
+description: 'Consulta a conta criada.'
+url: '{{BASE_URL}}/financial-control/accounts/{{createdAccountId}}'
+method: GET
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com a conta', () => {
+        pm.response.to.have.status(200);
+        const account = pm.response.json();
+        pm.expect(account.id).to.eql(pm.collectionVariables.get('createdAccountId'));
+        pm.expect(account.name).to.eql(pm.collectionVariables.get('createdAccountName'));
+        pm.expect(account.balance).to.eql('1500.00');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 9100
