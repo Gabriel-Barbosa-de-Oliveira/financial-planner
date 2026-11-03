@@ -1,0 +1,3 @@
+$kind: collection
+description: 'Contas (/financial-control/accounts). Rode a pasta inteira, na ordem: as requests compartilham variáveis (id e nomes criados em `Create account`). Exige o workspace `familia` criado pelo seed do banco.'
+order: 4000

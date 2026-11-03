@@ -1,0 +1,31 @@
+$kind: http-request
+description: 'Altera para o próprio nome em outra caixa: aceito.'
+url: '{{BASE_URL}}/financial-control/accounts/{{createdAccountId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{sameNameUpper}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('sameNameUpper', pm.collectionVariables.get('updatedAccountName').toUpperCase());
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 sem erro de duplicidade', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().name).to.eql(pm.collectionVariables.get('updatedAccountName').toUpperCase());
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 10200

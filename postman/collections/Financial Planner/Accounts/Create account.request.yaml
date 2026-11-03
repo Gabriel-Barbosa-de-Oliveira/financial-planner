@@ -1,0 +1,51 @@
+$kind: http-request
+description: 'Cadastra uma conta com nome com espaços nas pontas e saldo inicial. Deve responder 201 com nome aparado e saldo como texto. Define `createdAccountId` e `createdAccountName`.'
+url: '{{BASE_URL}}/financial-control/accounts'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{rawAccountName}}",
+      "type": "BANK",
+      "balance": "1500.00"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      // Nome único por execução, com espaços nas pontas, para exercitar o trim
+      const run = Date.now();
+      pm.collectionVariables.set('accountRunId', String(run));
+      pm.collectionVariables.set('rawAccountName', `  Nubank ${run} `);
+      pm.collectionVariables.set('createdAccountName', `Nubank ${run}`);
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 201', () => pm.response.to.have.status(201));
+      const account = pm.response.json();
+      pm.collectionVariables.set('createdAccountId', account.id);
+      pm.test('devolve exatamente os campos públicos da conta', () => {
+        pm.expect(Object.keys(account).sort()).to.eql(['balance', 'createdAt', 'id', 'isActive', 'name', 'type', 'updatedAt']);
+      });
+      pm.test('nome aparado, tipo, saldo como texto e conta ativa', () => {
+        pm.expect(account.name).to.eql(pm.collectionVariables.get('createdAccountName'));
+        pm.expect(account.type).to.eql('BANK');
+        pm.expect(account.balance).to.be.a('string').and.eql('1500.00');
+        pm.expect(account.isActive).to.eql(true);
+      });
+      pm.test('id é UUID e as datas são válidas', () => {
+        pm.expect(account.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+        pm.expect(new Date(account.createdAt).toString()).to.not.eql('Invalid Date');
+        pm.expect(new Date(account.updatedAt).toString()).to.not.eql('Invalid Date');
+      });
+      pm.test('responde em menos de 1 segundo', () => pm.expect(pm.response.responseTime).to.be.below(1000));
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 1000

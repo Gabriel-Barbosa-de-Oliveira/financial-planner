@@ -1,0 +1,28 @@
+$kind: http-request
+description: 'Lista as contas ativas por ordem de criação. Deve conter a conta criada.'
+url: '{{BASE_URL}}/financial-control/accounts'
+method: GET
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com um array', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json()).to.be.an('array');
+      });
+      const accounts = pm.response.json();
+      pm.test('contém a conta criada e cada item tem só os campos públicos', () => {
+        pm.expect(accounts.map((a) => a.id)).to.include(pm.collectionVariables.get('createdAccountId'));
+        accounts.forEach((a) => pm.expect(Object.keys(a).sort()).to.eql(['balance', 'createdAt', 'id', 'isActive', 'name', 'type', 'updatedAt']));
+        accounts.forEach((a) => pm.expect(a.isActive).to.eql(true));
+      });
+      pm.test('ordenado por data de criação', () => {
+        const times = accounts.map((a) => new Date(a.createdAt).getTime());
+        pm.expect(times).to.eql([...times].sort((a, b) => a - b));
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 9000

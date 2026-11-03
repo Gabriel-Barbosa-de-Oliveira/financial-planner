@@ -62,16 +62,19 @@ CREATE TABLE accounts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspaceId UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   name VARCHAR(100) NOT NULL,
-  balance DECIMAL(12, 2) DEFAULT 0.00,
+  balance DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
   type VARCHAR(50) NOT NULL, -- BANK, INVESTMENT, CASH, SAVINGS
   isActive BOOLEAN DEFAULT TRUE,
   createdAt TIMESTAMP DEFAULT NOW(),
-  updatedAt TIMESTAMP DEFAULT NOW()
+  updatedAt TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT check_account_type CHECK (type IN ('BANK', 'INVESTMENT', 'CASH', 'SAVINGS'))
 );
 
 CREATE INDEX idx_accounts_workspaceId ON accounts(workspaceId);
 CREATE INDEX idx_accounts_type ON accounts(type);
 CREATE INDEX idx_accounts_isActive ON accounts(isActive);
+-- Nome único por workspace apenas entre contas ativas, sem diferenciar maiúsculas (permite reutilizar o nome de uma conta desativada)
+CREATE UNIQUE INDEX idx_accounts_name_active ON accounts(workspaceId, LOWER(name)) WHERE isActive = TRUE;
 
 -- ============================================
 -- TABELA 5: CATEGORIES
@@ -246,6 +249,19 @@ COMMENT ON TABLE categories IS 'Categorias de ENTRADA ou SAÍDA';
 COMMENT ON TABLE transactions IS 'Transações financeiras (movimentação de dinheiro)';
 COMMENT ON TABLE installments IS 'Parcelas de transações parceladas';
 COMMENT ON TABLE audit_log IS 'Histórico de todas as mudanças no banco';
+
+-- ============================================
+-- SEED: WORKSPACE PADRÃO DO MVP
+-- ============================================
+-- O MVP usa um único workspace, "familia". Como workspaces.userId é obrigatório,
+-- o seed cria também o usuário dono. O password_hash abaixo não é um hash scrypt
+-- válido, então esse usuário não consegue autenticar; defina uma senha real pela
+-- API (PATCH /users/:id) quando a feature de login existir.
+INSERT INTO users (email, password_hash)
+VALUES ('familia@seed.local', '!seed-sem-senha');
+
+INSERT INTO workspaces (userId, name)
+SELECT id, 'familia' FROM users WHERE email = 'familia@seed.local' AND isActive = TRUE;
 
 -- ============================================
 -- FIM DO SCRIPT
