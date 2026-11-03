@@ -1,0 +1,20 @@
+$kind: http-example
+description: 'Update user - email in use - 409'
+request:
+  url: '{{BASE_URL}}/financial-control/users/{{createdUserId}}'
+  method: PATCH
+response:
+  statusCode: 409
+  statusText: 'Conflict'
+  headers:
+    - key: Content-Type
+      value: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "error": "USED_EMAIL",
+        "message": "E-mail já está em uso",
+        "statusCode": 409
+      }
+order: 1000

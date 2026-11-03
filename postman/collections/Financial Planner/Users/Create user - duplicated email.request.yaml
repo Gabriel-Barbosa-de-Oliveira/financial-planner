@@ -1,0 +1,44 @@
+$kind: http-request
+description: 'Tenta cadastrar o mesmo e-mail do `Create user` em maiúsculas. Deve responder 409. Depende de `Create user` ter rodado antes.'
+url: '{{BASE_URL}}/financial-control/users'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{duplicateEmail}}",
+      "password": "senha-segura-123"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      // Mesmo e-mail do cadastro anterior, em maiúsculas: a normalização deve igualar os dois
+      const created = pm.collectionVariables.get('createdUserEmail');
+      if (!created) {
+        throw new Error('Execute antes a request "Create user" (ela define createdUserEmail).');
+      }
+      pm.collectionVariables.set('duplicateEmail', created.toUpperCase());
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 409', () => pm.response.to.have.status(409));
+      pm.test('informa que o e-mail já está em uso', () => {
+        const body = pm.response.json();
+        pm.expect(body.error).to.eql('USED_EMAIL');
+        pm.expect(body.message).to.eql('E-mail já está em uso');
+        pm.expect(body.statusCode).to.eql(409);
+      });
+
+      pm.test('nunca expõe o valor da senha nem o hash', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('senha-segura-123');
+        pm.expect(text).to.not.include('scrypt');
+        pm.expect(text).to.not.include('password_hash');
+        pm.expect(text).to.not.include('passwordhash');
+      });
+examples: './.resources/Create user - duplicated email.resources/examples'
+order: 2000

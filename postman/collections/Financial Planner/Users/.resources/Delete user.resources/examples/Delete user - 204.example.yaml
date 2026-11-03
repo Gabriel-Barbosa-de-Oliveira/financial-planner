@@ -1,0 +1,12 @@
+$kind: http-example
+description: 'Delete user - 204'
+request:
+  url: '{{BASE_URL}}/financial-control/users/{{createdUserId}}'
+  method: DELETE
+response:
+  statusCode: 204
+  statusText: 'No Content'
+  body:
+    type: text
+    content: ''
+order: 1000

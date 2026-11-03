@@ -1,0 +1,33 @@
+$kind: http-request
+description: 'Tenta usar o e-mail do segundo usuário (criado em `Create user - minimum password`): 409.'
+url: '{{BASE_URL}}/financial-control/users/{{createdUserId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{secondUserEmail}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 409 E-mail já está em uso', () => {
+        pm.response.to.have.status(409);
+        const body = pm.response.json();
+        pm.expect(body.error).to.eql('USED_EMAIL');
+        pm.expect(body.message).to.eql('E-mail já está em uso');
+      });
+      pm.test('nunca expõe o valor da senha nem o hash', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('senha-segura-123');
+        pm.expect(text).to.not.include('nova-senha-123');
+        pm.expect(text).to.not.include('scrypt');
+        pm.expect(text).to.not.include('password_hash');
+        pm.expect(text).to.not.include('passwordhash');
+      });
+examples: './.resources/Update user - email in use.resources/examples'
+order: 10300

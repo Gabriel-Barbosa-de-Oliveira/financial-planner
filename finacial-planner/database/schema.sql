@@ -11,14 +11,15 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email VARCHAR(255) NOT NULL UNIQUE,
+  email VARCHAR(255) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   isActive BOOLEAN DEFAULT TRUE,
   createdAt TIMESTAMP DEFAULT NOW(),
   updatedAt TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_users_email ON users(email);
+-- E-mail único apenas entre usuários ativos (permite reutilizar o e-mail de um usuário desativado)
+CREATE UNIQUE INDEX idx_users_email_active ON users(email) WHERE isActive = TRUE;
 CREATE INDEX idx_users_isActive ON users(isActive);
 
 -- ============================================
@@ -189,13 +190,13 @@ RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
     INSERT INTO audit_log (tableName, recordId, action, newValue)
-    VALUES (TG_TABLE_NAME, NEW.id, 'CREATE', to_jsonb(NEW));
+    VALUES (TG_TABLE_NAME, NEW.id, 'CREATE', to_jsonb(NEW) - 'password_hash');
   ELSIF TG_OP = 'UPDATE' THEN
     INSERT INTO audit_log (tableName, recordId, action, oldValue, newValue)
-    VALUES (TG_TABLE_NAME, NEW.id, 'UPDATE', to_jsonb(OLD), to_jsonb(NEW));
+    VALUES (TG_TABLE_NAME, NEW.id, 'UPDATE', to_jsonb(OLD) - 'password_hash', to_jsonb(NEW) - 'password_hash');
   ELSIF TG_OP = 'DELETE' THEN
     INSERT INTO audit_log (tableName, recordId, action, oldValue)
-    VALUES (TG_TABLE_NAME, OLD.id, 'DELETE', to_jsonb(OLD));
+    VALUES (TG_TABLE_NAME, OLD.id, 'DELETE', to_jsonb(OLD) - 'password_hash');
   END IF;
   RETURN NEW;
 END;

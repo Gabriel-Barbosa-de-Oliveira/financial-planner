@@ -1,0 +1,20 @@
+$kind: http-example
+description: 'Create user - duplicated email - 409'
+request:
+  url: '{{BASE_URL}}/financial-control/users'
+  method: POST
+response:
+  statusCode: 409
+  statusText: Conflict
+  headers:
+    - key: Content-Type
+      value: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "error": "USED_EMAIL",
+        "message": "E-mail já está em uso",
+        "statusCode": 409
+      }
+order: 1000

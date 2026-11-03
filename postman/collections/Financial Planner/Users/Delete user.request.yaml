@@ -1,0 +1,14 @@
+$kind: http-request
+description: 'Desativa o usuário criado (exclusão lógica): 204 sem corpo.'
+url: '{{BASE_URL}}/financial-control/users/{{createdUserId}}'
+method: DELETE
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 204 sem corpo', () => {
+        pm.response.to.have.status(204);
+        pm.expect(pm.response.text()).to.eql('');
+      });
+examples: './.resources/Delete user.resources/examples'
+order: 11000

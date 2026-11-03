@@ -1,0 +1,23 @@
+$kind: http-request
+description: 'A lista não traz o desativado e ainda traz o segundo usuário.'
+url: '{{BASE_URL}}/financial-control/users'
+method: GET
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200', () => pm.response.to.have.status(200));
+      const ids = pm.response.json().map((u) => u.id);
+      pm.test('sem o usuário desativado e com o segundo usuário', () => {
+        pm.expect(ids).to.not.include(pm.collectionVariables.get('createdUserId'));
+        pm.expect(ids).to.include(pm.collectionVariables.get('secondUserId'));
+      });
+      pm.test('nunca expõe o valor da senha nem o hash', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('senha-segura-123');
+        pm.expect(text).to.not.include('nova-senha-123');
+        pm.expect(text).to.not.include('scrypt');
+        pm.expect(text).to.not.include('password_hash');
+        pm.expect(text).to.not.include('passwordhash');
+      });
+order: 11400

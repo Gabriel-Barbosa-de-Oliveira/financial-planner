@@ -1,0 +1,37 @@
+$kind: http-request
+description: 'Reenvia o próprio e-mail em maiúsculas: não é conflito, deve responder 200.'
+url: '{{BASE_URL}}/financial-control/users/{{createdUserId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{sameEmailUpper}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('sameEmailUpper', pm.collectionVariables.get('createdUserEmail').toUpperCase());
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200', () => pm.response.to.have.status(200));
+      const user = pm.response.json();
+      pm.test('devolve exatamente os campos públicos', () => {
+        pm.expect(Object.keys(user).sort()).to.eql(['createdAt', 'email', 'id', 'isActive', 'updatedAt']);
+        pm.expect(user.isActive).to.eql(true);
+      });
+      pm.test('e-mail continua o mesmo, normalizado', () => pm.expect(user.email).to.eql(pm.collectionVariables.get('createdUserEmail')));
+      pm.test('nunca expõe o valor da senha nem o hash', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('senha-segura-123');
+        pm.expect(text).to.not.include('nova-senha-123');
+        pm.expect(text).to.not.include('scrypt');
+        pm.expect(text).to.not.include('password_hash');
+        pm.expect(text).to.not.include('passwordhash');
+      });
+order: 10200

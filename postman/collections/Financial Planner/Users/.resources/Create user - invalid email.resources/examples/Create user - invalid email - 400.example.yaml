@@ -1,0 +1,26 @@
+$kind: http-example
+description: 'Create user - invalid email - 400'
+request:
+  url: '{{BASE_URL}}/financial-control/users'
+  method: POST
+response:
+  statusCode: 400
+  statusText: Bad Request
+  headers:
+    - key: Content-Type
+      value: application/json; charset=utf-8
+  body:
+    type: json
+    content: |-
+      {
+        "error": "Validation Error",
+        "message": "Dados enviados não passaram na validação",
+        "statusCode": 400,
+        "issues": [
+          {
+            "field": "email",
+            "message": "E-mail inválido"
+          }
+        ]
+      }
+order: 1000
