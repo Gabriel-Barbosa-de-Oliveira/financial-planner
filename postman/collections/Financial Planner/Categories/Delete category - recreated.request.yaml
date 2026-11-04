@@ -1,0 +1,15 @@
+$kind: http-request
+description: 'Desativa a recriada para liberar o nome: 204.'
+url: '{{BASE_URL}}/financial-control/categories/{{recreatedCategoryId}}'
+method: DELETE
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 204', () => pm.response.to.have.status(204));
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 8600

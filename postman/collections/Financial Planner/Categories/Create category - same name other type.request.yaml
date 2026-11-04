@@ -1,0 +1,28 @@
+$kind: http-request
+description: 'O mesmo nome da primeira categoria em outro tipo (ENTRADA) é aceito: 201. Define `thirdCategoryId`.'
+url: '{{BASE_URL}}/financial-control/categories'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{createdCategoryName}}",
+      "type": "ENTRADA"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 201', () => {
+        pm.response.to.have.status(201);
+        pm.collectionVariables.set('thirdCategoryId', pm.response.json().id);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 2200

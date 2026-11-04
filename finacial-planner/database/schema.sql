@@ -77,23 +77,44 @@ CREATE INDEX idx_accounts_isActive ON accounts(isActive);
 CREATE UNIQUE INDEX idx_accounts_name_active ON accounts(workspaceId, LOWER(name)) WHERE isActive = TRUE;
 
 -- ============================================
--- TABELA 5: CATEGORIES
+-- TABELA 5: CLASSIFICATIONS
 -- ============================================
-CREATE TABLE categories (
+CREATE TABLE classifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspaceId UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   name VARCHAR(100) NOT NULL,
-  type VARCHAR(20) NOT NULL, -- ENTRADA ou SAÍDA
   isActive BOOLEAN DEFAULT TRUE,
   createdAt TIMESTAMP DEFAULT NOW(),
   updatedAt TIMESTAMP DEFAULT NOW()
 );
 
+CREATE INDEX idx_classifications_workspaceId ON classifications(workspaceId);
+CREATE INDEX idx_classifications_isActive ON classifications(isActive);
+-- Nome único por workspace apenas entre classificações ativas, sem diferenciar maiúsculas (permite reutilizar o nome de uma desativada)
+CREATE UNIQUE INDEX idx_classifications_name_active ON classifications(workspaceId, LOWER(name)) WHERE isActive = TRUE;
+
+-- ============================================
+-- TABELA 5.1: CATEGORIES
+-- ============================================
+CREATE TABLE categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspaceId UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  classificationId UUID REFERENCES classifications(id), -- opcional: categoria pode ficar sem classificação
+  name VARCHAR(100) NOT NULL,
+  type VARCHAR(20) NOT NULL, -- ENTRADA ou SAIDA
+  isActive BOOLEAN DEFAULT TRUE,
+  createdAt TIMESTAMP DEFAULT NOW(),
+  updatedAt TIMESTAMP DEFAULT NOW(),
+  CONSTRAINT check_category_type CHECK (type IN ('ENTRADA', 'SAIDA'))
+);
+
 CREATE INDEX idx_categories_workspaceId ON categories(workspaceId);
+CREATE INDEX idx_categories_classificationId ON categories(classificationId);
 CREATE INDEX idx_categories_type ON categories(type);
 CREATE INDEX idx_categories_isActive ON categories(isActive);
-CREATE UNIQUE INDEX idx_categories_unique_per_workspace 
-  ON categories(workspaceId, name, type) WHERE isActive = TRUE;
+-- Nome único por workspace e tipo apenas entre categorias ativas, sem diferenciar maiúsculas (permite reutilizar o nome de uma desativada)
+CREATE UNIQUE INDEX idx_categories_name_type_active
+  ON categories(workspaceId, LOWER(name), type) WHERE isActive = TRUE;
 
 -- ============================================
 -- TABELA 6: TRANSACTIONS
@@ -225,6 +246,10 @@ CREATE TRIGGER trg_audit_accounts
 AFTER INSERT OR UPDATE OR DELETE ON accounts
 FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
 
+CREATE TRIGGER trg_audit_classifications
+AFTER INSERT OR UPDATE OR DELETE ON classifications
+FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
+
 CREATE TRIGGER trg_audit_categories
 AFTER INSERT OR UPDATE OR DELETE ON categories
 FOR EACH ROW EXECUTE FUNCTION fn_audit_log();
@@ -245,7 +270,8 @@ COMMENT ON TABLE users IS 'Usuários do sistema (mono-tenant)';
 COMMENT ON TABLE workspaces IS 'Espaços de controle financeiro (familiar)';
 COMMENT ON TABLE members IS 'Pessoas que fazem lançamentos no workspace';
 COMMENT ON TABLE accounts IS 'Contas onde dinheiro é armazenado (banco, investimento, carteira)';
-COMMENT ON TABLE categories IS 'Categorias de ENTRADA ou SAÍDA';
+COMMENT ON TABLE classifications IS 'Classificações (grupos) de categorias';
+COMMENT ON TABLE categories IS 'Categorias de ENTRADA ou SAIDA, opcionalmente ligadas a uma classificação';
 COMMENT ON TABLE transactions IS 'Transações financeiras (movimentação de dinheiro)';
 COMMENT ON TABLE installments IS 'Parcelas de transações parceladas';
 COMMENT ON TABLE audit_log IS 'Histórico de todas as mudanças no banco';

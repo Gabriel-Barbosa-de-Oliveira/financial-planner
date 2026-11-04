@@ -1,0 +1,28 @@
+$kind: http-request
+description: 'Campo proibido (`isActive`): 400.'
+url: '{{BASE_URL}}/financial-control/classifications/{{createdClassificationId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Outro",
+      "isActive": false
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 recusando o campo proibido', () => {
+        pm.response.to.have.status(400);
+        pm.expect(pm.response.json().issues.map((i) => i.message)).to.include('Campo não permitido na alteração de classificação');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 6400

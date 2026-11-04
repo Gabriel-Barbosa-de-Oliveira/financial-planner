@@ -1,0 +1,31 @@
+$kind: http-request
+description: 'Renomeia para o próprio nome em outra caixa: 200, sem erro de duplicidade.'
+url: '{{BASE_URL}}/financial-control/classifications/{{createdClassificationId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{createdClassificationNameUpper}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('createdClassificationNameUpper', pm.collectionVariables.get('createdClassificationName').toUpperCase());
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200', () => {
+        pm.response.to.have.status(200);
+        pm.collectionVariables.set('createdClassificationName', pm.response.json().name);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 6200

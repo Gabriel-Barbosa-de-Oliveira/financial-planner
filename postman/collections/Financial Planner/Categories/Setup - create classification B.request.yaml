@@ -1,0 +1,29 @@
+$kind: http-request
+description: 'Cria a classificação B (Esportes). Define `catClassBId` e `catClassBName`.'
+url: '{{BASE_URL}}/financial-control/classifications'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{catClassBName}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('catClassBName', `Esportes ${pm.collectionVariables.get('categoryRunId')}`);
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 201', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('catClassBId', pm.response.json().id);
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 1100

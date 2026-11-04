@@ -1,0 +1,27 @@
+$kind: http-request
+description: 'O tipo é imutável: 400.'
+url: '{{BASE_URL}}/financial-control/categories/{{createdCategoryId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "type": "ENTRADA"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 recusando o tipo', () => {
+        pm.response.to.have.status(400);
+        pm.expect(pm.response.json().issues.map((i) => i.message)).to.include('Campo não permitido na alteração de categoria');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 6400

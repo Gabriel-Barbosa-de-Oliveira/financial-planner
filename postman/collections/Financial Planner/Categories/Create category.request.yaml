@@ -1,0 +1,49 @@
+$kind: http-request
+description: 'Cadastra uma categoria de saída na classificação A, com espaços nas pontas. Deve responder 201 com a classificação aninhada. Define `createdCategoryId` e `createdCategoryName`.'
+url: '{{BASE_URL}}/financial-control/categories'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{rawCategoryName}}",
+      "type": "SAIDA",
+      "classificationId": "{{catClassAId}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      const run = pm.collectionVariables.get('categoryRunId');
+      pm.collectionVariables.set('rawCategoryName', `  Gasolina ${run} `);
+      pm.collectionVariables.set('createdCategoryName', `Gasolina ${run}`);
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 201', () => pm.response.to.have.status(201));
+      const item = pm.response.json();
+      pm.collectionVariables.set('createdCategoryId', item.id);
+      pm.test('devolve exatamente os campos públicos da categoria', () => {
+        pm.expect(Object.keys(pm.response.json()).sort()).to.eql(['classification', 'createdAt', 'id', 'isActive', 'name', 'type', 'updatedAt']);
+      });
+      pm.test('nome aparado, tipo, classificação aninhada e categoria ativa', () => {
+        pm.expect(item.name).to.eql(pm.collectionVariables.get('createdCategoryName'));
+        pm.expect(item.type).to.eql('SAIDA');
+        pm.expect(item.classification).to.eql({ id: pm.collectionVariables.get('catClassAId'), name: pm.collectionVariables.get('catClassAName') });
+        pm.expect(item.isActive).to.eql(true);
+      });
+      pm.test('id é UUID e as datas são válidas', () => {
+        pm.expect(item.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+        pm.expect(new Date(item.createdAt).toString()).to.not.eql('Invalid Date');
+        pm.expect(new Date(item.updatedAt).toString()).to.not.eql('Invalid Date');
+      });
+      pm.test('responde em menos de 1 segundo', () => pm.expect(pm.response.responseTime).to.be.below(1000));
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 2000

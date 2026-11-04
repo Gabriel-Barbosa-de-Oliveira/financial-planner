@@ -1,0 +1,23 @@
+$kind: http-request
+description: 'Reativa a classificação desativada: 200, mesmo id, ativa.'
+url: '{{BASE_URL}}/financial-control/classifications/{{createdClassificationId}}/reactivate'
+method: POST
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com o mesmo id e ativa', () => {
+        pm.response.to.have.status(200);
+        const item = pm.response.json();
+        pm.expect(item.id).to.eql(pm.collectionVariables.get('createdClassificationId'));
+        pm.expect(item.isActive).to.eql(true);
+      });
+      pm.test('devolve exatamente os campos públicos da classificação', () => {
+        pm.expect(Object.keys(pm.response.json()).sort()).to.eql(['createdAt', 'id', 'isActive', 'name', 'updatedAt']);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 8800

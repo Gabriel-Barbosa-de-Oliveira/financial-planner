@@ -1,0 +1,18 @@
+$kind: http-request
+description: 'Identificador inválido: 400.'
+url: '{{BASE_URL}}/financial-control/classifications/abc/reactivate'
+method: POST
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 Identificador inválido', () => {
+        pm.response.to.have.status(400);
+        pm.expect(pm.response.json().issues[0].message).to.eql('Identificador inválido');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 8950

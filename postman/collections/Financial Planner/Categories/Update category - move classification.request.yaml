@@ -1,0 +1,27 @@
+$kind: http-request
+description: 'Move a categoria para a classificação B.'
+url: '{{BASE_URL}}/financial-control/categories/{{createdCategoryId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "classificationId": "{{catClassBId}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com a nova classificação', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().classification.id).to.eql(pm.collectionVariables.get('catClassBId'));
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 6100

@@ -1,0 +1,22 @@
+$kind: http-request
+description: 'A categoria continua ativa, agora sem classificação.'
+url: '{{BASE_URL}}/financial-control/categories/{{createdCategoryId}}'
+method: GET
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200, ativa e sem classificação', () => {
+        pm.response.to.have.status(200);
+        const item = pm.response.json();
+        pm.expect(item.isActive).to.eql(true);
+        pm.expect(item.classification).to.eql(null);
+        pm.expect(item.name).to.eql(pm.collectionVariables.get('createdCategoryName'));
+        pm.expect(item.type).to.eql('SAIDA');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 7300

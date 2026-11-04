@@ -1,0 +1,27 @@
+$kind: http-request
+description: 'Volta a categoria para a classificação A, preparando o teste de desativação da classificação.'
+url: '{{BASE_URL}}/financial-control/categories/{{createdCategoryId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "classificationId": "{{catClassAId}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 na classificação A', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().classification.id).to.eql(pm.collectionVariables.get('catClassAId'));
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 7100

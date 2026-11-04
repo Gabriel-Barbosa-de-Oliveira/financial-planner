@@ -1,0 +1,29 @@
+$kind: http-request
+description: 'Tenta usar o nome da segunda classificação: 409.'
+url: '{{BASE_URL}}/financial-control/classifications/{{createdClassificationId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{secondClassificationName}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 409 Já existe uma classificação com este nome', () => {
+        pm.response.to.have.status(409);
+        const body = pm.response.json();
+        pm.expect(body.error).to.eql('USED_CLASSIFICATION_NAME');
+        pm.expect(body.message).to.eql('Já existe uma classificação com este nome');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 6100

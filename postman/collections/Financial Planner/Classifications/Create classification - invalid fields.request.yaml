@@ -1,0 +1,29 @@
+$kind: http-request
+description: 'Nome vazio: 400 com `issues` apontando o campo.'
+url: '{{BASE_URL}}/financial-control/classifications'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": ""
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 com issues por campo', () => {
+        pm.response.to.have.status(400);
+        const issues = pm.response.json().issues;
+        pm.expect(issues.map((i) => i.field)).to.eql(['name']);
+        pm.expect(issues[0].message).to.eql('Nome é obrigatório');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 3000

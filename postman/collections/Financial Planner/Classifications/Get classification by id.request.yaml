@@ -1,0 +1,21 @@
+$kind: http-request
+description: 'Consulta a classificação criada: 200.'
+url: '{{BASE_URL}}/financial-control/classifications/{{createdClassificationId}}'
+method: GET
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com a classificação', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('createdClassificationId'));
+      });
+      pm.test('devolve exatamente os campos públicos da classificação', () => {
+        pm.expect(Object.keys(pm.response.json()).sort()).to.eql(['createdAt', 'id', 'isActive', 'name', 'updatedAt']);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 5000

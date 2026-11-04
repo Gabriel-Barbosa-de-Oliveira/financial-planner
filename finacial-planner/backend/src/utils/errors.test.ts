@@ -1,6 +1,13 @@
 import { describe, it, expect } from '@jest/globals';
 import {
   AccountNotFoundError,
+  CategoryAlreadyActiveError,
+  CategoryNotFoundError,
+  ClassificationAlreadyActiveError,
+  ClassificationNotFoundError,
+  InvalidClassificationError,
+  UsedCategoryNameError,
+  UsedClassificationNameError,
   DomainError,
   UsedAccountNameError,
   UsedEmailError,
@@ -44,6 +51,13 @@ describe.each([
   [AccountNotFoundError, 'ACCOUNT_NOT_FOUND', 404, 'Conta não encontrada'],
   [UsedAccountNameError, 'USED_ACCOUNT_NAME', 409, 'Já existe uma conta com este nome'],
   [WorkspaceUnavailableError, 'WORKSPACE_UNAVAILABLE', 422, 'Workspace padrão não encontrado'],
+  [ClassificationNotFoundError, 'CLASSIFICATION_NOT_FOUND', 404, 'Classificação não encontrada'],
+  [UsedClassificationNameError, 'USED_CLASSIFICATION_NAME', 409, 'Já existe uma classificação com este nome'],
+  [ClassificationAlreadyActiveError, 'CLASSIFICATION_ALREADY_ACTIVE', 409, 'Classificação já está ativa'],
+  [CategoryNotFoundError, 'CATEGORY_NOT_FOUND', 404, 'Categoria não encontrada'],
+  [UsedCategoryNameError, 'USED_CATEGORY_NAME', 409, 'Já existe uma categoria com este nome para este tipo'],
+  [CategoryAlreadyActiveError, 'CATEGORY_ALREADY_ACTIVE', 409, 'Categoria já está ativa'],
+  [InvalidClassificationError, 'INVALID_CLASSIFICATION', 422, 'Classificação não encontrada'],
 ])('%p', (ErrorClass, code, statusCode, message) => {
   const error = new ErrorClass();
 

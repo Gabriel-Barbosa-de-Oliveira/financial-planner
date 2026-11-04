@@ -1,0 +1,21 @@
+$kind: http-request
+description: 'Consulta a categoria criada: 200.'
+url: '{{BASE_URL}}/financial-control/categories/{{createdCategoryId}}'
+method: GET
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com a categoria', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('createdCategoryId'));
+      });
+      pm.test('devolve exatamente os campos públicos da categoria', () => {
+        pm.expect(Object.keys(pm.response.json()).sort()).to.eql(['classification', 'createdAt', 'id', 'isActive', 'name', 'type', 'updatedAt']);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 5000

@@ -1,0 +1,35 @@
+$kind: http-request
+description: 'Renomeia a classificação (nome com espaços nas pontas): 200, mesmo id, `updatedAt` renovado.'
+url: '{{BASE_URL}}/financial-control/classifications/{{createdClassificationId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "  {{renamedClassificationName}} "
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('renamedClassificationName', `Veículos ${pm.collectionVariables.get('classificationRunId')}`);
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com o novo nome e o mesmo id', () => {
+        pm.response.to.have.status(200);
+        const item = pm.response.json();
+        pm.expect(item.id).to.eql(pm.collectionVariables.get('createdClassificationId'));
+        pm.expect(item.name).to.eql(pm.collectionVariables.get('renamedClassificationName'));
+        pm.expect(new Date(item.updatedAt).getTime()).to.be.above(new Date(item.createdAt).getTime());
+        pm.collectionVariables.set('createdClassificationName', item.name);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 6000

@@ -1,0 +1,29 @@
+$kind: http-request
+description: 'Classificação inexistente: 422, nada muda.'
+url: '{{BASE_URL}}/financial-control/categories/{{createdCategoryId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "classificationId": "00000000-0000-4000-8000-000000000000"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 422 Classificação não encontrada', () => {
+        pm.response.to.have.status(422);
+        const body = pm.response.json();
+        pm.expect(body.error).to.eql('INVALID_CLASSIFICATION');
+        pm.expect(body.message).to.eql('Classificação não encontrada');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 6600

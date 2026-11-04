@@ -1,0 +1,29 @@
+$kind: http-request
+description: 'Classificação desativada não pode ser alterada: 404.'
+url: '{{BASE_URL}}/financial-control/classifications/{{createdClassificationId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Qualquer"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 404 Classificação não encontrada', () => {
+        pm.response.to.have.status(404);
+        const body = pm.response.json();
+        pm.expect(body.error).to.eql('CLASSIFICATION_NOT_FOUND');
+        pm.expect(body.message).to.eql('Classificação não encontrada');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 8300

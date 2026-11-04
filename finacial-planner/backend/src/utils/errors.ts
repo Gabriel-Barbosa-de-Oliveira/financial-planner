@@ -39,3 +39,46 @@ export class WorkspaceUnavailableError extends DomainError {
     super('WORKSPACE_UNAVAILABLE', 422, 'Workspace padrão não encontrado');
   }
 }
+
+export class ClassificationNotFoundError extends DomainError {
+  constructor() {
+    super('CLASSIFICATION_NOT_FOUND', 404, 'Classificação não encontrada');
+  }
+}
+
+export class UsedClassificationNameError extends DomainError {
+  constructor() {
+    super('USED_CLASSIFICATION_NAME', 409, 'Já existe uma classificação com este nome');
+  }
+}
+
+export class ClassificationAlreadyActiveError extends DomainError {
+  constructor() {
+    super('CLASSIFICATION_ALREADY_ACTIVE', 409, 'Classificação já está ativa');
+  }
+}
+
+export class CategoryNotFoundError extends DomainError {
+  constructor() {
+    super('CATEGORY_NOT_FOUND', 404, 'Categoria não encontrada');
+  }
+}
+
+export class UsedCategoryNameError extends DomainError {
+  constructor() {
+    super('USED_CATEGORY_NAME', 409, 'Já existe uma categoria com este nome para este tipo');
+  }
+}
+
+export class CategoryAlreadyActiveError extends DomainError {
+  constructor() {
+    super('CATEGORY_ALREADY_ACTIVE', 409, 'Categoria já está ativa');
+  }
+}
+
+// Classificação informada no corpo de uma categoria não existe ou está desativada
+export class InvalidClassificationError extends DomainError {
+  constructor() {
+    super('INVALID_CLASSIFICATION', 422, 'Classificação não encontrada');
+  }
+}

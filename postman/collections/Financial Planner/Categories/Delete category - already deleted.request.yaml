@@ -1,0 +1,20 @@
+$kind: http-request
+description: 'Desativar de novo: 404.'
+url: '{{BASE_URL}}/financial-control/categories/{{createdCategoryId}}'
+method: DELETE
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 404 Categoria não encontrada', () => {
+        pm.response.to.have.status(404);
+        const body = pm.response.json();
+        pm.expect(body.error).to.eql('CATEGORY_NOT_FOUND');
+        pm.expect(body.message).to.eql('Categoria não encontrada');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 8100

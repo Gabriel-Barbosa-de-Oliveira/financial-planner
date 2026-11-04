@@ -1,0 +1,21 @@
+$kind: http-request
+description: 'Filtra pela classificação A: só categorias dela.'
+url: '{{BASE_URL}}/financial-control/categories?classificationId={{catClassAId}}'
+method: GET
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 só com categorias da classificação A', () => {
+        pm.response.to.have.status(200);
+        const items = pm.response.json();
+        pm.expect(items.length).to.be.at.least(2);
+        items.forEach((i) => pm.expect(i.classification.id).to.eql(pm.collectionVariables.get('catClassAId')));
+        pm.expect(items.map((i) => i.id)).to.not.include(pm.collectionVariables.get('secondCategoryId'));
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 4100

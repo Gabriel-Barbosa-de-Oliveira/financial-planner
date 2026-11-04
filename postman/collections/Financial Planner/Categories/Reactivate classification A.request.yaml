@@ -1,0 +1,18 @@
+$kind: http-request
+description: 'Reativa a classificação A: 200.'
+url: '{{BASE_URL}}/financial-control/classifications/{{catClassAId}}/reactivate'
+method: POST
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 ativa', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json().isActive).to.eql(true);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 7400

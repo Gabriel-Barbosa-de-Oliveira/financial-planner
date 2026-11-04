@@ -1,0 +1,36 @@
+$kind: http-request
+description: 'Renomeia a categoria: 200, mesmo id e tipo, `updatedAt` renovado.'
+url: '{{BASE_URL}}/financial-control/categories/{{createdCategoryId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{renamedCategoryName}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('renamedCategoryName', `Combustível ${pm.collectionVariables.get('categoryRunId')}`);
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com o novo nome, o mesmo id e o mesmo tipo', () => {
+        pm.response.to.have.status(200);
+        const item = pm.response.json();
+        pm.expect(item.id).to.eql(pm.collectionVariables.get('createdCategoryId'));
+        pm.expect(item.name).to.eql(pm.collectionVariables.get('renamedCategoryName'));
+        pm.expect(item.type).to.eql('SAIDA');
+        pm.expect(new Date(item.updatedAt).getTime()).to.be.above(new Date(item.createdAt).getTime());
+        pm.collectionVariables.set('createdCategoryName', item.name);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 6000
