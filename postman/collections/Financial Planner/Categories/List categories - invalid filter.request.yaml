@@ -1,0 +1,18 @@
+$kind: http-request
+description: 'Tipo inválido no filtro: 400.'
+url: '{{BASE_URL}}/financial-control/categories?type=XYZ'
+method: GET
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 apontando o tipo', () => {
+        pm.response.to.have.status(400);
+        pm.expect(pm.response.json().issues.map((i) => i.field)).to.eql(['type']);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 4300

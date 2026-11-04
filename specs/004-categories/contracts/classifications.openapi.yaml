@@ -1,0 +1,250 @@
+openapi: 3.0.3
+info:
+  title: Financial Control - Classificações
+  version: 0.4.0
+  description: CRUD de classificações do workspace padrão, mais reativação. Operações abertas no MVP, sem autenticação. Desativar uma classificação deixa suas categorias ativas "Sem classificação".
+servers:
+  - url: http://localhost:8080/financial-control
+paths:
+  /classifications:
+    post:
+      summary: Cadastra uma classificação
+      operationId: createClassification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassificationRequest'
+            example:
+              name: Automóvel
+      responses:
+        '201':
+          description: Classificação criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Classification'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/UsedName'
+        '422':
+          description: Workspace padrão não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: WORKSPACE_UNAVAILABLE
+                message: Workspace padrão não encontrado
+                statusCode: 422
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      summary: Lista as classificações ativas, em ordem de criação
+      operationId: listClassifications
+      responses:
+        '200':
+          description: Lista (vazia se não houver classificações)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Classification'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /classifications/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      summary: Consulta uma classificação ativa
+      operationId: getClassification
+      responses:
+        '200':
+          description: Classificação
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Classification'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      summary: Altera o nome de uma classificação ativa
+      operationId: updateClassification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClassificationRequest'
+            example:
+              name: Veículos
+      responses:
+        '200':
+          description: Classificação alterada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Classification'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/UsedName'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      summary: Desativa uma classificação (remoção lógica); suas categorias ativas ficam sem classificação
+      operationId: deactivateClassification
+      responses:
+        '204':
+          description: Desativada
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /classifications/{id}/reactivate:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      summary: Reativa uma classificação desativada (sem religar categorias)
+      operationId: reactivateClassification
+      responses:
+        '200':
+          description: Classificação reativada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Classification'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Nome já em uso por outra classificação ativa, ou classificação já ativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                usedName:
+                  value:
+                    error: USED_CLASSIFICATION_NAME
+                    message: Já existe uma classificação com este nome
+                    statusCode: 409
+                alreadyActive:
+                  value:
+                    error: CLASSIFICATION_ALREADY_ACTIVE
+                    message: Classificação já está ativa
+                    statusCode: 409
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    ClassificationRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Espaços nas pontas são removidos; único entre ativas, sem diferenciar maiúsculas
+    Classification:
+      type: object
+      required: [id, name, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      required: [error, message, statusCode]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        statusCode:
+          type: integer
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+  responses:
+    ValidationError:
+      description: Entrada inválida (corpo, campo não permitido ou identificador)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Validation Error
+            message: Dados enviados não passaram na validação
+            statusCode: 400
+            issues:
+              - field: name
+                message: Nome é obrigatório
+    NotFound:
+      description: Classificação não encontrada (inexistente ou desativada)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: CLASSIFICATION_NOT_FOUND
+            message: Classificação não encontrada
+            statusCode: 404
+    UsedName:
+      description: Já existe uma classificação ativa com este nome
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: USED_CLASSIFICATION_NAME
+            message: Já existe uma classificação com este nome
+            statusCode: 409
+    InternalError:
+      description: Erro inesperado (mensagem genérica, sem detalhes internos)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Internal Server Error
+            message: Algo deu errado no servidor
+            statusCode: 500

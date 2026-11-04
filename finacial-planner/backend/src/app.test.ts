@@ -9,7 +9,13 @@ import { createAccountService } from './services/accountService.ts';
 import type { Account, AccountRepository } from './repositories/accountRepository.ts';
 import { createPasswordHasher } from './utils/passwordHasher.ts';
 import { securityConfig } from './config/security.ts';
-import { UsedAccountNameError, UsedEmailError } from './utils/errors.ts';
+import { createClassificationController } from './controllers/classificationController.ts';
+import { createClassificationService } from './services/classificationService.ts';
+import type { Classification, ClassificationRepository } from './repositories/classificationRepository.ts';
+import { createCategoryController } from './controllers/categoryController.ts';
+import { createCategoryService } from './services/categoryService.ts';
+import type { Category, CategoryRepository } from './repositories/categoryRepository.ts';
+import { UsedAccountNameError, UsedCategoryNameError, UsedClassificationNameError, UsedEmailError } from './utils/errors.ts';
 import type { User, UserRepository } from './repositories/userRepository.ts';
 
 const PASSWORD = 'senha-segura-123';
@@ -108,6 +114,154 @@ function createInMemoryAccountRepository({ hasWorkspace = true }: { hasWorkspace
   return { repository, rows };
 }
 
+type CategoryRow = Omit<Category, 'classification'> & { classificationId: string | null };
+
+// Os dois repositories compartilham o mesmo armazenamento, como as duas tabelas do banco
+function createInMemoryCatalog({ hasWorkspace = true }: { hasWorkspace?: boolean } = {}) {
+  const classifications: Classification[] = [];
+  const categories: CategoryRow[] = [];
+  const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const touch = (row: { updatedAt: Date }) => {
+    row.updatedAt = new Date(Math.max(Date.now(), row.updatedAt.getTime() + 1));
+  };
+  const activeClassification = (id: string | null) =>
+    classifications.find((candidate) => candidate.id === id && candidate.isActive);
+  const view = ({ classificationId, ...row }: CategoryRow): Category => {
+    const classification = activeClassification(classificationId);
+    return { ...row, classification: classification ? { id: classification.id, name: classification.name } : null };
+  };
+  const nameTaken = (name: string, type: string, exceptId?: string) =>
+    categories.some((other) => other.id !== exceptId && other.isActive && other.type === type && sameName(other.name, name));
+  const classificationNameTaken = (name: string, exceptId?: string) =>
+    classifications.some((other) => other.id !== exceptId && other.isActive && sameName(other.name, name));
+
+  const classificationRepository: ClassificationRepository = {
+    async create({ name }) {
+      if (!hasWorkspace) return null;
+      if (classificationNameTaken(name)) throw new UsedClassificationNameError();
+      const now = new Date();
+      const row: Classification = { id: crypto.randomUUID(), name, isActive: true, createdAt: now, updatedAt: now };
+      classifications.push(row);
+      return { ...row };
+    },
+    async findAll() {
+      return classifications.filter((row) => row.isActive).map((row) => ({ ...row }));
+    },
+    async findById(id) {
+      const row = activeClassification(id);
+      return row ? { ...row } : null;
+    },
+    async update(id, { name }) {
+      const row = activeClassification(id);
+      if (!row) return null;
+      if (classificationNameTaken(name, id)) throw new UsedClassificationNameError();
+      row.name = name;
+      touch(row);
+      return { ...row };
+    },
+    async deactivate(id) {
+      const row = activeClassification(id);
+      if (!row) return false;
+      row.isActive = false;
+      touch(row);
+      categories.filter((category) => category.isActive && category.classificationId === id).forEach((category) => {
+        category.classificationId = null;
+        touch(category);
+      });
+      return true;
+    },
+    async reactivate(id) {
+      const row = classifications.find((candidate) => candidate.id === id && !candidate.isActive);
+      if (!row) return null;
+      if (classificationNameTaken(row.name, id)) throw new UsedClassificationNameError();
+      row.isActive = true;
+      touch(row);
+      categories.filter((category) => category.classificationId === id).forEach((category) => {
+        category.classificationId = null;
+        touch(category);
+      });
+      return { ...row };
+    },
+    async findActiveState(id) {
+      const row = classifications.find((candidate) => candidate.id === id);
+      return row ? row.isActive : null;
+    },
+  };
+
+  const activeCategory = (id: string) => categories.find((candidate) => candidate.id === id && candidate.isActive);
+  const categoryRepository: CategoryRepository = {
+    async create({ name, type, classificationId }) {
+      if (!hasWorkspace) return null;
+      if (nameTaken(name, type)) throw new UsedCategoryNameError();
+      const now = new Date();
+      const row: CategoryRow = { id: crypto.randomUUID(), name, type, classificationId, isActive: true, createdAt: now, updatedAt: now };
+      categories.push(row);
+      return view(row);
+    },
+    async findAll({ classificationId, type } = {}) {
+      return categories
+        .filter((row) => row.isActive)
+        .map(view)
+        .filter((row) => classificationId === undefined || row.classification?.id === classificationId)
+        .filter((row) => type === undefined || row.type === type);
+    },
+    async findById(id) {
+      const row = activeCategory(id);
+      return row ? view(row) : null;
+    },
+    async update(id, changes) {
+      const row = activeCategory(id);
+      if (!row) return null;
+      if (changes.name !== undefined && nameTaken(changes.name, row.type, id)) throw new UsedCategoryNameError();
+      if (changes.name !== undefined) row.name = changes.name;
+      if (changes.classificationId !== undefined) row.classificationId = changes.classificationId;
+      touch(row);
+      return view(row);
+    },
+    async deactivate(id) {
+      const row = activeCategory(id);
+      if (!row) return false;
+      row.isActive = false;
+      touch(row);
+      return true;
+    },
+    async reactivate(id) {
+      const row = categories.find((candidate) => candidate.id === id && !candidate.isActive);
+      if (!row) return null;
+      if (nameTaken(row.name, row.type, id)) throw new UsedCategoryNameError();
+      row.isActive = true;
+      if (!activeClassification(row.classificationId)) row.classificationId = null;
+      touch(row);
+      return view(row);
+    },
+    async findActiveState(id) {
+      const row = categories.find((candidate) => candidate.id === id);
+      return row ? row.isActive : null;
+    },
+  };
+
+  return { classificationRepository, categoryRepository, classifications, categories };
+}
+
+// Controllers de classificação e categoria sobre um catálogo em memória, para os testes que não os exercitam
+function catalogDependencies(catalog = createInMemoryCatalog()) {
+  return {
+    classification: {
+      controller: createClassificationController(
+        createClassificationService({ repository: catalog.classificationRepository }),
+      ),
+    },
+    category: {
+      controller: createCategoryController(
+        createCategoryService({
+          repository: catalog.categoryRepository,
+          classificationRepository: catalog.classificationRepository,
+        }),
+      ),
+    },
+  };
+}
+
 describe('POST /financial-control/users (ponta a ponta, sem banco)', () => {
   let app: Awaited<ReturnType<typeof createServer>>;
   let rows: ReturnType<typeof createInMemoryRepository>['rows'];
@@ -141,6 +295,7 @@ describe('POST /financial-control/users (ponta a ponta, sem banco)', () => {
       async (instance) => registerRoutes(instance, {
         user: { controller: createUserController(service) },
         account: { controller: createAccountController(createAccountService({ repository: createInMemoryAccountRepository().repository })) },
+        ...catalogDependencies(),
       }),
       { prefix: '/financial-control' },
     );
@@ -411,6 +566,7 @@ describe('/financial-control/accounts (ponta a ponta, sem banco)', () => {
       async (instance) => registerRoutes(instance, {
         user: { controller: createUserController(userService) },
         account: { controller: createAccountController(createAccountService({ repository: memory.repository })) },
+        ...catalogDependencies(),
       }),
       { prefix: '/financial-control' },
     );
@@ -649,6 +805,7 @@ describe('/financial-control/accounts (ponta a ponta, sem banco)', () => {
           hasher: createPasswordHasher(securityConfig.scrypt),
         })) },
         account: { controller: createAccountController(createAccountService({ repository: failing })) },
+        ...catalogDependencies(),
       }),
       { prefix: '/financial-control' },
     );
@@ -659,6 +816,468 @@ describe('/financial-control/accounts (ponta a ponta, sem banco)', () => {
     responses.forEach((response) => {
       expect(response.statusCode).toBe(500);
       expect(response.body).not.toContain('10.0.0.1');
+    });
+  });
+});
+
+describe('/financial-control/classifications e /categories (ponta a ponta, sem banco)', () => {
+  let app: Awaited<ReturnType<typeof createServer>>;
+  let catalog: ReturnType<typeof createInMemoryCatalog>;
+  let logs: string[];
+  const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
+  const BASE = '/financial-control';
+
+  async function start({ hasWorkspace = true }: { hasWorkspace?: boolean } = {}) {
+    catalog = createInMemoryCatalog({ hasWorkspace });
+    const stream = new Writable({
+      write(chunk, _encoding, callback) {
+        logs.push(chunk.toString());
+        callback();
+      },
+    });
+    app = await createServer({ level: 'trace', stream });
+    await app.register(
+      async (instance) => registerRoutes(instance, {
+        user: { controller: createUserController(createUserService({
+          repository: createInMemoryRepository().repository,
+          hasher: createPasswordHasher(securityConfig.scrypt),
+        })) },
+        account: { controller: createAccountController(createAccountService({ repository: createInMemoryAccountRepository().repository })) },
+        ...catalogDependencies(catalog),
+      }),
+      { prefix: BASE },
+    );
+    await app.ready();
+  }
+
+  beforeEach(async () => {
+    logs = [];
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    await start();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    jest.restoreAllMocks();
+  });
+
+  const call = (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', url: string, payload?: object) =>
+    app.inject({ method, url: `${BASE}${url}`, ...(payload ? { payload } : {}) });
+  const createClassification = async (name: string) => (await call('POST', '/classifications', { name })).json();
+  const createCategory = async (body: object) => (await call('POST', '/categories', body)).json();
+
+  describe('classificações', () => {
+    it('cadastra, apara o nome e não expõe workspaceId', async () => {
+      const response = await call('POST', '/classifications', { name: '  Automóvel ' });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toMatchObject({ name: 'Automóvel', isActive: true });
+      expect(response.json()).not.toHaveProperty('workspaceId');
+      expect(response.json().createdAt).toBeDefined();
+    });
+
+    it('recusa nome repetido sem diferenciar caixa, mas aceita outra acentuação', async () => {
+      await createClassification('Automóvel');
+
+      const duplicated = await call('POST', '/classifications', { name: 'AUTOMÓVEL' });
+      expect(duplicated.statusCode).toBe(409);
+      expect(duplicated.json().message).toBe('Já existe uma classificação com este nome');
+      expect((await call('POST', '/classifications', { name: 'Automovel' })).statusCode).toBe(201);
+    });
+
+    it('recusa entradas inválidas com issues por campo e campos proibidos', async () => {
+      const invalid = await call('POST', '/classifications', { name: '' });
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.json().issues).toEqual([{ field: 'name', message: 'Nome é obrigatório' }]);
+      expect((await call('POST', '/classifications', { name: 'x'.repeat(101) })).statusCode).toBe(400);
+      expect((await call('POST', '/classifications', { name: 'A', isActive: false })).statusCode).toBe(400);
+      expect((await call('POST', '/classifications', { name: 'A', id: UNKNOWN_ID })).statusCode).toBe(400);
+      expect(catalog.classifications).toHaveLength(0);
+    });
+
+    it('lista vazia, depois ordenada; consulta por id, inexistente e inválido', async () => {
+      expect((await call('GET', '/classifications')).json()).toEqual([]);
+      const first = await createClassification('Automóvel');
+      await createClassification('Comidas');
+
+      expect((await call('GET', '/classifications')).json().map((item: { name: string }) => item.name)).toEqual(['Automóvel', 'Comidas']);
+      expect((await call('GET', `/classifications/${first.id}`)).json().id).toBe(first.id);
+      expect((await call('GET', `/classifications/${UNKNOWN_ID}`)).json().message).toBe('Classificação não encontrada');
+      expect((await call('GET', '/classifications/abc')).json().issues[0].message).toBe('Identificador inválido');
+    });
+
+    it('responde 422 quando não há workspace e 500 genérico em erro inesperado', async () => {
+      await app.close();
+      await start({ hasWorkspace: false });
+      expect((await call('POST', '/classifications', { name: 'A' })).statusCode).toBe(422);
+
+      await app.close();
+      app = await createServer(false);
+      const failing = () => { throw new Error('connection refused to 10.0.0.1'); };
+      const failingRepository: ClassificationRepository = {
+        create: failing, findAll: failing, findById: failing, update: failing, deactivate: failing, reactivate: failing, findActiveState: failing,
+      };
+      await app.register(
+        async (instance) => registerRoutes(instance, {
+          user: { controller: createUserController(createUserService({
+            repository: createInMemoryRepository().repository,
+            hasher: createPasswordHasher(securityConfig.scrypt),
+          })) },
+          account: { controller: createAccountController(createAccountService({ repository: createInMemoryAccountRepository().repository })) },
+          ...catalogDependencies(),
+          classification: { controller: createClassificationController(createClassificationService({ repository: failingRepository })) },
+        }),
+        { prefix: BASE },
+      );
+      await app.ready();
+
+      const response = await call('GET', '/classifications');
+      expect(response.statusCode).toBe(500);
+      expect(response.body).not.toContain('10.0.0.1');
+    });
+
+    it('altera o nome (categorias passam a mostrar o novo nome), recusa nome em uso e aceita o próprio nome', async () => {
+      const cars = await createClassification('Automóvel');
+      await createClassification('Comidas');
+      const gasoline = await createCategory({ name: 'Gasolina', type: 'SAIDA', classificationId: cars.id });
+
+      const renamed = await call('PATCH', `/classifications/${cars.id}`, { name: 'Veículos' });
+      expect(renamed.statusCode).toBe(200);
+      expect(renamed.json()).toMatchObject({ id: cars.id, name: 'Veículos' });
+      expect(new Date(renamed.json().updatedAt).getTime()).toBeGreaterThan(new Date(cars.updatedAt).getTime());
+      expect((await call('GET', `/categories/${gasoline.id}`)).json().classification).toEqual({ id: cars.id, name: 'Veículos' });
+
+      const inUse = await call('PATCH', `/classifications/${cars.id}`, { name: 'comidas' });
+      expect(inUse.statusCode).toBe(409);
+      expect((await call('GET', `/classifications/${cars.id}`)).json().name).toBe('Veículos');
+      expect((await call('PATCH', `/classifications/${cars.id}`, { name: 'VEÍCULOS' })).statusCode).toBe(200);
+    });
+
+    it('recusa alteração inválida e inexistente', async () => {
+      const cars = await createClassification('Automóvel');
+
+      expect((await call('PATCH', `/classifications/${cars.id}`, {})).statusCode).toBe(400);
+      expect((await call('PATCH', `/classifications/${cars.id}`, { name: 'A', isActive: false })).statusCode).toBe(400);
+      expect((await call('PATCH', '/classifications/abc', { name: 'A' })).statusCode).toBe(400);
+      expect((await call('PATCH', `/classifications/${UNKNOWN_ID}`, { name: 'A' })).statusCode).toBe(404);
+    });
+
+    it('desativa (204), some das consultas, repete 404 e libera o nome', async () => {
+      const cars = await createClassification('Automóvel');
+
+      expect((await call('DELETE', `/classifications/${cars.id}`)).statusCode).toBe(204);
+      expect((await call('GET', `/classifications/${cars.id}`)).statusCode).toBe(404);
+      expect((await call('GET', '/classifications')).json()).toEqual([]);
+      expect(catalog.classifications).toHaveLength(1);
+      expect(catalog.classifications[0].isActive).toBe(false);
+      expect((await call('DELETE', `/classifications/${cars.id}`)).statusCode).toBe(404);
+      expect((await call('PATCH', `/classifications/${cars.id}`, { name: 'X' })).statusCode).toBe(404);
+      expect((await call('DELETE', '/classifications/abc')).statusCode).toBe(400);
+
+      const again = await call('POST', '/classifications', { name: 'Automóvel' });
+      expect(again.statusCode).toBe(201);
+      expect(again.json().id).not.toBe(cars.id);
+    });
+
+    it('reativa mantendo o id, e recusa nome em uso, já ativa, inexistente e id inválido', async () => {
+      const cars = await createClassification('Automóvel');
+      await call('DELETE', `/classifications/${cars.id}`);
+
+      const reactivated = await call('POST', `/classifications/${cars.id}/reactivate`);
+      expect(reactivated.statusCode).toBe(200);
+      expect(reactivated.json()).toMatchObject({ id: cars.id, isActive: true });
+      expect((await call('GET', `/classifications/${cars.id}`)).statusCode).toBe(200);
+
+      const active = await call('POST', `/classifications/${cars.id}/reactivate`);
+      expect(active.statusCode).toBe(409);
+      expect(active.json().message).toBe('Classificação já está ativa');
+      expect((await call('POST', `/classifications/${UNKNOWN_ID}/reactivate`)).statusCode).toBe(404);
+      expect((await call('POST', '/classifications/abc/reactivate')).statusCode).toBe(400);
+
+      await call('DELETE', `/classifications/${cars.id}`);
+      await createClassification('automóvel');
+      const inUse = await call('POST', `/classifications/${cars.id}/reactivate`);
+      expect(inUse.statusCode).toBe(409);
+      expect(inUse.json().message).toBe('Já existe uma classificação com este nome');
+    });
+  });
+
+  describe('categorias', () => {
+    it('cadastra os três exemplos do pedido com a classificação certa', async () => {
+      const cars = await createClassification('Automóvel');
+      const food = await createClassification('Comidas');
+      const leisure = await createClassification('Lazer');
+
+      const gasoline = await call('POST', '/categories', { name: 'Gasolina', type: 'SAIDA', classificationId: cars.id });
+      await call('POST', '/categories', { name: 'Supermercado', type: 'SAIDA', classificationId: food.id });
+      await call('POST', '/categories', { name: 'Futvôlei', type: 'SAIDA', classificationId: leisure.id });
+
+      expect(gasoline.statusCode).toBe(201);
+      expect(gasoline.json()).toMatchObject({
+        name: 'Gasolina',
+        type: 'SAIDA',
+        classification: { id: cars.id, name: 'Automóvel' },
+        isActive: true,
+      });
+      expect(gasoline.json()).not.toHaveProperty('workspaceId');
+      expect(gasoline.json()).not.toHaveProperty('classificationId');
+      const list = (await call('GET', '/categories')).json();
+      expect(list.map((item: { name: string; classification: { name: string } }) => [item.name, item.classification.name])).toEqual([
+        ['Gasolina', 'Automóvel'],
+        ['Supermercado', 'Comidas'],
+        ['Futvôlei', 'Lazer'],
+      ]);
+    });
+
+    it('cadastra sem classificação e com null: classification null', async () => {
+      const salary = await call('POST', '/categories', { name: 'Salário', type: 'ENTRADA' });
+      const bonus = await call('POST', '/categories', { name: 'Bônus', type: 'ENTRADA', classificationId: null });
+
+      expect(salary.statusCode).toBe(201);
+      expect(salary.json().classification).toBeNull();
+      expect(bonus.json().classification).toBeNull();
+    });
+
+    it('unicidade por nome dentro do tipo, sem diferenciar caixa', async () => {
+      const cars = await createClassification('Automóvel');
+      const food = await createClassification('Comidas');
+      await createCategory({ name: 'Gasolina', type: 'SAIDA', classificationId: cars.id });
+
+      const sameType = await call('POST', '/categories', { name: ' gasolina ', type: 'SAIDA', classificationId: food.id });
+      expect(sameType.statusCode).toBe(409);
+      expect(sameType.json().message).toBe('Já existe uma categoria com este nome para este tipo');
+      expect((await call('POST', '/categories', { name: 'Gasolina', type: 'ENTRADA' })).statusCode).toBe(201);
+    });
+
+    it('recusa classificação inexistente ou desativada com 422, sem gravar', async () => {
+      const cars = await createClassification('Automóvel');
+      await call('DELETE', `/classifications/${cars.id}`);
+
+      for (const classificationId of [UNKNOWN_ID, cars.id]) {
+        const response = await call('POST', '/categories', { name: 'Gasolina', type: 'SAIDA', classificationId });
+        expect(response.statusCode).toBe(422);
+        expect(response.json()).toMatchObject({ error: 'INVALID_CLASSIFICATION', message: 'Classificação não encontrada' });
+      }
+      expect(catalog.categories).toHaveLength(0);
+    });
+
+    it('recusa entradas inválidas e campos proibidos', async () => {
+      const invalid = await call('POST', '/categories', { name: '', type: 'SAÍDA', classificationId: 'abc' });
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.json().issues.map((issue: { field: string }) => issue.field).sort()).toEqual(['classificationId', 'name', 'type']);
+      expect((await call('POST', '/categories', { name: 'A' })).statusCode).toBe(400);
+      expect((await call('POST', '/categories', { name: 'A', type: 'SAIDA', isActive: false })).statusCode).toBe(400);
+      expect((await call('POST', '/categories', { name: 'A', type: 'SAIDA', workspaceId: UNKNOWN_ID })).statusCode).toBe(400);
+      expect(catalog.categories).toHaveLength(0);
+    });
+
+    it('filtra a lista por classificação, tipo e ambos; filtro inválido 400; classificação desconhecida vazia', async () => {
+      const cars = await createClassification('Automóvel');
+      const food = await createClassification('Comidas');
+      await createCategory({ name: 'Gasolina', type: 'SAIDA', classificationId: cars.id });
+      await createCategory({ name: 'Supermercado', type: 'SAIDA', classificationId: food.id });
+      await createCategory({ name: 'Reembolso combustível', type: 'ENTRADA', classificationId: cars.id });
+      await createCategory({ name: 'Salário', type: 'ENTRADA' });
+      const names = async (query: string) =>
+        (await call('GET', `/categories${query}`)).json().map((item: { name: string }) => item.name);
+
+      expect(await names('')).toHaveLength(4);
+      expect(await names(`?classificationId=${cars.id}`)).toEqual(['Gasolina', 'Reembolso combustível']);
+      expect(await names('?type=ENTRADA')).toEqual(['Reembolso combustível', 'Salário']);
+      expect(await names(`?classificationId=${cars.id}&type=SAIDA`)).toEqual(['Gasolina']);
+      expect(await names(`?classificationId=${UNKNOWN_ID}`)).toEqual([]);
+      expect((await call('GET', '/categories?type=XYZ')).statusCode).toBe(400);
+      expect((await call('GET', '/categories?classificationId=abc')).statusCode).toBe(400);
+    });
+
+    it('consulta por id, inexistente 404 e inválido 400', async () => {
+      const salary = await createCategory({ name: 'Salário', type: 'ENTRADA' });
+
+      expect((await call('GET', `/categories/${salary.id}`)).json()).toMatchObject({ id: salary.id, classification: null });
+      expect((await call('GET', `/categories/${UNKNOWN_ID}`)).json().message).toBe('Categoria não encontrada');
+      expect((await call('GET', '/categories/abc')).json().issues[0].message).toBe('Identificador inválido');
+    });
+
+    it('responde 422 quando não há workspace e 500 genérico em erro inesperado', async () => {
+      await app.close();
+      await start({ hasWorkspace: false });
+      expect((await call('POST', '/categories', { name: 'A', type: 'SAIDA' })).statusCode).toBe(422);
+
+      await app.close();
+      app = await createServer(false);
+      const failing = () => { throw new Error('connection refused to 10.0.0.1'); };
+      const failingRepository: CategoryRepository = {
+        create: failing, findAll: failing, findById: failing, update: failing, deactivate: failing, reactivate: failing, findActiveState: failing,
+      };
+      await app.register(
+        async (instance) => registerRoutes(instance, {
+          user: { controller: createUserController(createUserService({
+            repository: createInMemoryRepository().repository,
+            hasher: createPasswordHasher(securityConfig.scrypt),
+          })) },
+          account: { controller: createAccountController(createAccountService({ repository: createInMemoryAccountRepository().repository })) },
+          ...catalogDependencies(),
+          category: { controller: createCategoryController(createCategoryService({
+            repository: failingRepository,
+            classificationRepository: createInMemoryCatalog().classificationRepository,
+          })) },
+        }),
+        { prefix: BASE },
+      );
+      await app.ready();
+
+      const response = await call('GET', '/categories');
+      expect(response.statusCode).toBe(500);
+      expect(response.body).not.toContain('10.0.0.1');
+    });
+
+    it('move para outra classificação, renomeia, remove o vínculo e altera tudo junto', async () => {
+      const leisure = await createClassification('Lazer');
+      const sports = await createClassification('Esportes');
+      const futvolei = await createCategory({ name: 'Futvôlei', type: 'SAIDA', classificationId: leisure.id });
+
+      const moved = await call('PATCH', `/categories/${futvolei.id}`, { classificationId: sports.id });
+      expect(moved.statusCode).toBe(200);
+      expect(moved.json()).toMatchObject({ id: futvolei.id, type: 'SAIDA', classification: { id: sports.id, name: 'Esportes' } });
+      expect(new Date(moved.json().updatedAt).getTime()).toBeGreaterThan(new Date(futvolei.updatedAt).getTime());
+
+      const renamed = await call('PATCH', `/categories/${futvolei.id}`, { name: 'Futevôlei' });
+      expect(renamed.json()).toMatchObject({ name: 'Futevôlei', classification: { id: sports.id } });
+
+      const unlinked = await call('PATCH', `/categories/${futvolei.id}`, { classificationId: null });
+      expect(unlinked.json().classification).toBeNull();
+      expect(unlinked.json().name).toBe('Futevôlei');
+
+      const both = await call('PATCH', `/categories/${futvolei.id}`, { name: 'Vôlei', classificationId: leisure.id });
+      expect(both.json()).toMatchObject({ name: 'Vôlei', classification: { id: leisure.id } });
+    });
+
+    it('recusa nome em uso no mesmo tipo, aceita o próprio nome e recusa classificação inválida sem alterar', async () => {
+      const leisure = await createClassification('Lazer');
+      await createCategory({ name: 'Cinema', type: 'SAIDA' });
+      const futvolei = await createCategory({ name: 'Futvôlei', type: 'SAIDA', classificationId: leisure.id });
+
+      expect((await call('PATCH', `/categories/${futvolei.id}`, { name: 'cinema' })).statusCode).toBe(409);
+      expect((await call('PATCH', `/categories/${futvolei.id}`, { name: 'FUTVÔLEI' })).statusCode).toBe(200);
+
+      await call('DELETE', `/classifications/${leisure.id}`);
+      const other = await createClassification('Esportes');
+      await call('DELETE', `/classifications/${other.id}`);
+      for (const classificationId of [UNKNOWN_ID, other.id]) {
+        const response = await call('PATCH', `/categories/${futvolei.id}`, { classificationId });
+        expect(response.statusCode).toBe(422);
+      }
+      expect((await call('GET', `/categories/${futvolei.id}`)).json().name).toBe('FUTVÔLEI');
+    });
+
+    it('recusa tipo, corpo vazio, campos proibidos, id inválido e categoria inexistente na alteração', async () => {
+      const salary = await createCategory({ name: 'Salário', type: 'ENTRADA' });
+
+      expect((await call('PATCH', `/categories/${salary.id}`, { type: 'SAIDA' })).statusCode).toBe(400);
+      expect((await call('PATCH', `/categories/${salary.id}`, {})).statusCode).toBe(400);
+      expect((await call('PATCH', `/categories/${salary.id}`, { name: 'A', isActive: false })).statusCode).toBe(400);
+      expect((await call('PATCH', '/categories/abc', { name: 'A' })).statusCode).toBe(400);
+      expect((await call('PATCH', `/categories/${UNKNOWN_ID}`, { name: 'A' })).statusCode).toBe(404);
+      expect((await call('GET', `/categories/${salary.id}`)).json().type).toBe('ENTRADA');
+    });
+
+    it('desativa (204), some das consultas, repete 404 e libera o nome', async () => {
+      const salary = await createCategory({ name: 'Salário', type: 'ENTRADA' });
+
+      expect((await call('DELETE', `/categories/${salary.id}`)).statusCode).toBe(204);
+      expect((await call('GET', `/categories/${salary.id}`)).statusCode).toBe(404);
+      expect((await call('GET', '/categories')).json()).toEqual([]);
+      expect(catalog.categories[0].isActive).toBe(false);
+      expect((await call('DELETE', `/categories/${salary.id}`)).statusCode).toBe(404);
+      expect((await call('DELETE', '/categories/abc')).statusCode).toBe(400);
+
+      const again = await call('POST', '/categories', { name: 'Salário', type: 'ENTRADA' });
+      expect(again.statusCode).toBe(201);
+      expect(again.json().id).not.toBe(salary.id);
+    });
+
+    it('reativa mantendo o id e a classificação ativa; recusa nome em uso, já ativa, inexistente e id inválido', async () => {
+      const cars = await createClassification('Automóvel');
+      const gasoline = await createCategory({ name: 'Gasolina', type: 'SAIDA', classificationId: cars.id });
+      await call('DELETE', `/categories/${gasoline.id}`);
+
+      const reactivated = await call('POST', `/categories/${gasoline.id}/reactivate`);
+      expect(reactivated.statusCode).toBe(200);
+      expect(reactivated.json()).toMatchObject({ id: gasoline.id, isActive: true, classification: { id: cars.id } });
+
+      const active = await call('POST', `/categories/${gasoline.id}/reactivate`);
+      expect(active.statusCode).toBe(409);
+      expect(active.json().message).toBe('Categoria já está ativa');
+      expect((await call('POST', `/categories/${UNKNOWN_ID}/reactivate`)).statusCode).toBe(404);
+      expect((await call('POST', '/categories/abc/reactivate')).statusCode).toBe(400);
+
+      await call('DELETE', `/categories/${gasoline.id}`);
+      await createCategory({ name: 'gasolina', type: 'SAIDA' });
+      const inUse = await call('POST', `/categories/${gasoline.id}/reactivate`);
+      expect(inUse.statusCode).toBe(409);
+      expect(inUse.json().message).toBe('Já existe uma categoria com este nome para este tipo');
+    });
+
+    it('reativar categoria cuja classificação está desativada devolve classification null', async () => {
+      const cars = await createClassification('Automóvel');
+      const gasoline = await createCategory({ name: 'Gasolina', type: 'SAIDA', classificationId: cars.id });
+      await call('DELETE', `/categories/${gasoline.id}`);
+      await call('DELETE', `/classifications/${cars.id}`);
+
+      const reactivated = await call('POST', `/categories/${gasoline.id}/reactivate`);
+
+      expect(reactivated.statusCode).toBe(200);
+      expect(reactivated.json().classification).toBeNull();
+    });
+  });
+
+  describe('desativar e reativar classificação com categorias', () => {
+    it('desativar deixa as categorias ativas sem classificação, intactas e ativas', async () => {
+      const cars = await createClassification('Automóvel');
+      const gasoline = await createCategory({ name: 'Gasolina', type: 'SAIDA', classificationId: cars.id });
+      const refund = await createCategory({ name: 'Reembolso', type: 'ENTRADA', classificationId: cars.id });
+      const inactive = await createCategory({ name: 'Pedágio', type: 'SAIDA', classificationId: cars.id });
+      await call('DELETE', `/categories/${inactive.id}`);
+
+      expect((await call('DELETE', `/classifications/${cars.id}`)).statusCode).toBe(204);
+
+      const after = (await call('GET', '/categories')).json();
+      expect(after).toHaveLength(2);
+      expect(after.map((item: { id: string }) => item.id)).toEqual([gasoline.id, refund.id]);
+      after.forEach((item: { classification: unknown; isActive: boolean }) => {
+        expect(item.classification).toBeNull();
+        expect(item.isActive).toBe(true);
+      });
+      expect(after[0]).toMatchObject({ name: 'Gasolina', type: 'SAIDA' });
+      expect(after[1]).toMatchObject({ name: 'Reembolso', type: 'ENTRADA' });
+      // categoria já desativada não é tocada
+      expect(catalog.categories.find((row) => row.id === inactive.id)?.classificationId).toBe(cars.id);
+    });
+
+    it('reativar a classificação não religa as categorias desvinculadas nem as que ficaram apontando', async () => {
+      const cars = await createClassification('Automóvel');
+      const gasoline = await createCategory({ name: 'Gasolina', type: 'SAIDA', classificationId: cars.id });
+      const inactive = await createCategory({ name: 'Pedágio', type: 'SAIDA', classificationId: cars.id });
+      await call('DELETE', `/categories/${inactive.id}`);
+      await call('DELETE', `/classifications/${cars.id}`);
+
+      expect((await call('POST', `/classifications/${cars.id}/reactivate`)).statusCode).toBe(200);
+
+      expect((await call('GET', `/categories/${gasoline.id}`)).json().classification).toBeNull();
+      const reactivated = await call('POST', `/categories/${inactive.id}/reactivate`);
+      expect(reactivated.json().classification).toBeNull();
+    });
+
+    it('nunca mostra categoria ativa ligada a classificação inativa', async () => {
+      const cars = await createClassification('Automóvel');
+      await createCategory({ name: 'Gasolina', type: 'SAIDA', classificationId: cars.id });
+      // simula o resíduo de corrida: vínculo gravado depois da desativação
+      catalog.classifications[0].isActive = false;
+
+      const list = (await call('GET', '/categories')).json();
+
+      expect(list[0].classification).toBeNull();
+      expect((await call('GET', `/categories?classificationId=${cars.id}`)).json()).toEqual([]);
     });
   });
 });

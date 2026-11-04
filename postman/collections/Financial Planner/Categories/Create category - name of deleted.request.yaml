@@ -1,0 +1,30 @@
+$kind: http-request
+description: 'O nome da categoria desativada pode ser reutilizado: 201 com outro id. Define `recreatedCategoryId`.'
+url: '{{BASE_URL}}/financial-control/categories'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{createdCategoryName}}",
+      "type": "SAIDA"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 201 com outro id', () => {
+        pm.response.to.have.status(201);
+        const item = pm.response.json();
+        pm.expect(item.id).to.not.eql(pm.collectionVariables.get('createdCategoryId'));
+        pm.collectionVariables.set('recreatedCategoryId', item.id);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 8400

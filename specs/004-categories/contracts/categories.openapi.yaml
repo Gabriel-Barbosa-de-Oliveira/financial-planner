@@ -1,0 +1,334 @@
+openapi: 3.0.3
+info:
+  title: Financial Control - Categorias
+  version: 0.4.0
+  description: CRUD de categorias do workspace padrão, mais reativação. Operações abertas no MVP, sem autenticação. A classificação é opcional; categoria sem classificação traz classification = null.
+servers:
+  - url: http://localhost:8080/financial-control
+paths:
+  /categories:
+    post:
+      summary: Cadastra uma categoria
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+            examples:
+              gasoline:
+                value:
+                  name: Gasolina
+                  type: SAIDA
+                  classificationId: 6f1c7c0e-3b0a-4f0e-9a39-1d2f5a8e7b10
+              salary:
+                value:
+                  name: Salário
+                  type: ENTRADA
+      responses:
+        '201':
+          description: Categoria criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/UsedName'
+        '422':
+          description: Workspace padrão não encontrado (WORKSPACE_UNAVAILABLE) ou classificação informada inexistente/desativada (INVALID_CLASSIFICATION)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidClassification:
+                  value:
+                    error: INVALID_CLASSIFICATION
+                    message: Classificação não encontrada
+                    statusCode: 422
+                workspace:
+                  value:
+                    error: WORKSPACE_UNAVAILABLE
+                    message: Workspace padrão não encontrado
+                    statusCode: 422
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      summary: Lista as categorias ativas, em ordem de criação
+      operationId: listCategories
+      parameters:
+        - name: classificationId
+          in: query
+          required: false
+          description: Só categorias dessa classificação (id desconhecido devolve lista vazia)
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CategoryType'
+      responses:
+        '200':
+          description: Lista (vazia se não houver categorias)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /categories/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      summary: Consulta uma categoria ativa
+      operationId: getCategory
+      responses:
+        '200':
+          description: Categoria
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      summary: Altera nome e/ou classificação de uma categoria ativa (o tipo não muda)
+      operationId: updateCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCategoryRequest'
+            examples:
+              move:
+                value:
+                  classificationId: 0b9f4f55-6a47-4c53-9d0a-6a1b0f6a2c11
+              unlink:
+                value:
+                  classificationId: null
+      responses:
+        '200':
+          description: Categoria alterada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/UsedName'
+        '422':
+          description: Classificação informada inexistente ou desativada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: INVALID_CLASSIFICATION
+                message: Classificação não encontrada
+                statusCode: 422
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      summary: Desativa uma categoria (remoção lógica); lançamentos não são tocados
+      operationId: deactivateCategory
+      responses:
+        '204':
+          description: Desativada
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /categories/{id}/reactivate:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      summary: Reativa uma categoria desativada (mantém a classificação só se ela ainda estiver ativa)
+      operationId: reactivateCategory
+      responses:
+        '200':
+          description: Categoria reativada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Nome já em uso por outra categoria ativa do mesmo tipo, ou categoria já ativa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                usedName:
+                  value:
+                    error: USED_CATEGORY_NAME
+                    message: Já existe uma categoria com este nome para este tipo
+                    statusCode: 409
+                alreadyActive:
+                  value:
+                    error: CATEGORY_ALREADY_ACTIVE
+                    message: Categoria já está ativa
+                    statusCode: 409
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    CategoryType:
+      type: string
+      enum: [ENTRADA, SAIDA]
+      description: Sentido do lançamento; mensagens ao usuário escrevem "SAÍDA"
+    CreateCategoryRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Espaços nas pontas são removidos; único entre ativas do mesmo tipo, sem diferenciar maiúsculas
+        type:
+          $ref: '#/components/schemas/CategoryType'
+        classificationId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Opcional; classificação ativa existente
+    UpdateCategoryRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        classificationId:
+          type: string
+          format: uuid
+          nullable: true
+          description: null remove a classificação
+    Category:
+      type: object
+      required: [id, name, type, classification, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/CategoryType'
+        classification:
+          type: object
+          nullable: true
+          description: null quando a categoria não tem classificação ("Sem classificação")
+          required: [id, name]
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      required: [error, message, statusCode]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        statusCode:
+          type: integer
+        issues:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+  responses:
+    ValidationError:
+      description: Entrada inválida (corpo, campo não permitido, filtro ou identificador)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Validation Error
+            message: Dados enviados não passaram na validação
+            statusCode: 400
+            issues:
+              - field: type
+                message: Tipo inválido (use ENTRADA ou SAIDA)
+    NotFound:
+      description: Categoria não encontrada (inexistente ou desativada)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: CATEGORY_NOT_FOUND
+            message: Categoria não encontrada
+            statusCode: 404
+    UsedName:
+      description: Já existe uma categoria ativa com este nome para este tipo
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: USED_CATEGORY_NAME
+            message: Já existe uma categoria com este nome para este tipo
+            statusCode: 409
+    InternalError:
+      description: Erro inesperado (mensagem genérica, sem detalhes internos)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Internal Server Error
+            message: Algo deu errado no servidor
+            statusCode: 500

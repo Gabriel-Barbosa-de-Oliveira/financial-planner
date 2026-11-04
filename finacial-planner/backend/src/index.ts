@@ -6,11 +6,17 @@ import { createServer } from './server.ts';
 import { healthController } from './controllers/healthController.ts';
 import { createUserController } from './controllers/userController.ts';
 import { createAccountController } from './controllers/accountController.ts';
+import { createClassificationController } from './controllers/classificationController.ts';
+import { createCategoryController } from './controllers/categoryController.ts';
 import { registerRoutes } from './routes/routesIndex.ts';
 import { createUserRepository } from './repositories/userRepository.ts';
 import { createUserService } from './services/userService.ts';
 import { createAccountRepository } from './repositories/accountRepository.ts';
 import { createAccountService } from './services/accountService.ts';
+import { createClassificationRepository } from './repositories/classificationRepository.ts';
+import { createClassificationService } from './services/classificationService.ts';
+import { createCategoryRepository } from './repositories/categoryRepository.ts';
+import { createCategoryService } from './services/categoryService.ts';
 import { createPasswordHasher } from './utils/passwordHasher.ts';
 
 
@@ -42,10 +48,18 @@ async function start() {
     const accountService = createAccountService({
       repository: createAccountRepository(query, defaultWorkspaceConfig.name),
     });
+    const classificationRepository = createClassificationRepository(query, defaultWorkspaceConfig.name);
+    const classificationService = createClassificationService({ repository: classificationRepository });
+    const categoryService = createCategoryService({
+      repository: createCategoryRepository(query, defaultWorkspaceConfig.name),
+      classificationRepository,
+    });
     await app.register(
       async (instance) => registerRoutes(instance, {
         user: { controller: createUserController(userService) },
         account: { controller: createAccountController(accountService) },
+        classification: { controller: createClassificationController(classificationService) },
+        category: { controller: createCategoryController(categoryService) },
       }),
       { prefix: controllersPrefix },
     );

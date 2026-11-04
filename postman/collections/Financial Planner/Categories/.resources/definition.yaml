@@ -1,0 +1,3 @@
+$kind: collection
+description: 'Categorias (/financial-control/categories). Rode a pasta inteira, na ordem: as requests compartilham variáveis (ids e nomes criados nas primeiras requests). A pasta cria as próprias classificações. Exige o workspace `familia` criado pelo seed do banco.'
+order: 6000

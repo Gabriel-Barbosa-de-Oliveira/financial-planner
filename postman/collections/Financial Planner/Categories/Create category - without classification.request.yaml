@@ -1,0 +1,35 @@
+$kind: http-request
+description: 'Categoria de entrada sem classificação: 201 com `classification` nulo. Define `secondCategoryId`.'
+url: '{{BASE_URL}}/financial-control/categories'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{secondCategoryName}}",
+      "type": "ENTRADA"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      pm.collectionVariables.set('secondCategoryName', `Salário ${pm.collectionVariables.get('categoryRunId')}`);
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 201 com classificação nula', () => {
+        pm.response.to.have.status(201);
+        const item = pm.response.json();
+        pm.expect(item.classification).to.eql(null);
+        pm.expect(item.type).to.eql('ENTRADA');
+        pm.collectionVariables.set('secondCategoryId', item.id);
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 2100

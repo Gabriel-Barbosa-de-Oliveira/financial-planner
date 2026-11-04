@@ -1,0 +1,28 @@
+$kind: http-request
+description: 'Lista as categorias ativas por ordem de criação. Deve conter as criadas.'
+url: '{{BASE_URL}}/financial-control/categories'
+method: GET
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 200 com um array', () => {
+        pm.response.to.have.status(200);
+        pm.expect(pm.response.json()).to.be.an('array');
+      });
+      const items = pm.response.json();
+      pm.test('contém as criadas e cada item tem só os campos públicos', () => {
+        const ids = items.map((i) => i.id);
+        [ 'createdCategoryId', 'secondCategoryId', 'thirdCategoryId' ].forEach((key) => pm.expect(ids).to.include(pm.collectionVariables.get(key)));
+        items.forEach((i) => pm.expect(Object.keys(i).sort()).to.eql(['classification', 'createdAt', 'id', 'isActive', 'name', 'type', 'updatedAt']));
+      });
+      pm.test('ordenado por data de criação', () => {
+        const times = items.map((i) => new Date(i.createdAt).getTime());
+        pm.expect(times).to.eql([...times].sort((a, b) => a - b));
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 4000

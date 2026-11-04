@@ -1,0 +1,47 @@
+$kind: http-request
+description: 'Cadastra uma classificação com espaços nas pontas. Deve responder 201 com nome aparado. Define `createdClassificationId` e `createdClassificationName`.'
+url: '{{BASE_URL}}/financial-control/classifications'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "{{rawClassificationName}}"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      // Nome único por execução, com espaços nas pontas, para exercitar o trim
+      const run = Date.now();
+      pm.collectionVariables.set('classificationRunId', String(run));
+      pm.collectionVariables.set('rawClassificationName', `  Automóvel ${run} `);
+      pm.collectionVariables.set('createdClassificationName', `Automóvel ${run}`);
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 201', () => pm.response.to.have.status(201));
+      const item = pm.response.json();
+      pm.collectionVariables.set('createdClassificationId', item.id);
+      pm.test('devolve exatamente os campos públicos da classificação', () => {
+        pm.expect(Object.keys(pm.response.json()).sort()).to.eql(['createdAt', 'id', 'isActive', 'name', 'updatedAt']);
+      });
+      pm.test('nome aparado e classificação ativa', () => {
+        pm.expect(item.name).to.eql(pm.collectionVariables.get('createdClassificationName'));
+        pm.expect(item.isActive).to.eql(true);
+      });
+      pm.test('id é UUID e as datas são válidas', () => {
+        pm.expect(item.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+        pm.expect(new Date(item.createdAt).toString()).to.not.eql('Invalid Date');
+        pm.expect(new Date(item.updatedAt).toString()).to.not.eql('Invalid Date');
+      });
+      pm.test('responde em menos de 1 segundo', () => pm.expect(pm.response.responseTime).to.be.below(1000));
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 1000

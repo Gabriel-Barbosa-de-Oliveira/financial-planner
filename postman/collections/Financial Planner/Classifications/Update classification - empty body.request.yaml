@@ -1,0 +1,25 @@
+$kind: http-request
+description: 'Corpo vazio: 400 com mensagem por campo.'
+url: '{{BASE_URL}}/financial-control/classifications/{{createdClassificationId}}'
+method: PATCH
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {}
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 por campo', () => {
+        pm.response.to.have.status(400);
+        pm.expect(pm.response.json().issues.map((i) => i.field)).to.include('name');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 6300

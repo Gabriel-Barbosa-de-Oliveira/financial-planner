@@ -1,0 +1,29 @@
+$kind: http-request
+description: 'Campos que o cliente não pode informar (`isActive`): 400.'
+url: '{{BASE_URL}}/financial-control/categories'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "Qualquer",
+      "type": "SAIDA",
+      "isActive": false
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 400 recusando o campo proibido', () => {
+        pm.response.to.have.status(400);
+        pm.expect(pm.response.json().issues.map((i) => i.message)).to.include('Campo não permitido no cadastro de categoria');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 3300

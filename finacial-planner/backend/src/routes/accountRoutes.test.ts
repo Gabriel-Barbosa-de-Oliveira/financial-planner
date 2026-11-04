@@ -37,6 +37,8 @@ describe('accountRoutes', () => {
     remove: handler(),
   };
 
+  const reactivatableStub = { create: handler(), list: handler(), getById: handler(), update: handler(), remove: handler(), reactivate: handler() };
+
   beforeEach(async () => {
     controller = {
       create: handler(),
@@ -47,7 +49,12 @@ describe('accountRoutes', () => {
     };
     app = await createServer(false);
     await app.register(
-      async (instance) => registerRoutes(instance, { user: { controller: userControllerStub }, account: { controller } }),
+      async (instance) => registerRoutes(instance, {
+        user: { controller: userControllerStub },
+        account: { controller },
+        classification: { controller: reactivatableStub },
+        category: { controller: reactivatableStub },
+      }),
       { prefix: '/financial-control' },
     );
     await app.ready();

@@ -1,0 +1,20 @@
+$kind: http-request
+description: 'Reativar uma categoria já ativa: 409.'
+url: '{{BASE_URL}}/financial-control/categories/{{createdCategoryId}}/reactivate'
+method: POST
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test('responde 409 Categoria já está ativa', () => {
+        pm.response.to.have.status(409);
+        const body = pm.response.json();
+        pm.expect(body.error).to.eql('CATEGORY_ALREADY_ACTIVE');
+        pm.expect(body.message).to.eql('Categoria já está ativa');
+      });
+      pm.test('não expõe o workspace nem detalhes internos', () => {
+        const text = pm.response.text().toLowerCase();
+        pm.expect(text).to.not.include('workspace');
+        pm.expect(text).to.not.include('stack');
+      });
+order: 7000
